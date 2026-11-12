@@ -25,6 +25,16 @@
   .row { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
   .word { display: flex; gap: 8px; justify-content: center; margin: 6px 0 12px; }
   .word span { width: 52px; height: 60px; display: flex; align-items: center; justify-content: center; background: #004388; color: #F9AC00; font-size: 34px; font-weight: 900; border-radius: 8px; box-shadow: 0 4px 0 #F9AC00; }
+  .dl { background: #FFF6DE; border: 3px solid #F9AC00; border-radius: 12px; padding: 14px 16px; margin: 6px 0 14px; }
+  .dl h2 { margin: 0 0 4px; font-size: 20px; }
+  .dl p { margin: 0 0 10px; font-size: 15px; }
+  .dlrow { display: flex; gap: 12px; flex-wrap: wrap; }
+  a.dlbtn { flex: 1 1 200px; display: flex; align-items: center; gap: 12px; background: #004388; color: #fff; text-decoration: none; border-radius: 10px; padding: 12px 16px; box-shadow: 0 4px 0 #00284f; transition: transform .1s, background .1s; }
+  a.dlbtn:hover { background: #00356b; transform: translateY(-2px); }
+  a.dlbtn .ico { font-size: 30px; line-height: 1; }
+  a.dlbtn b { display: block; font-size: 19px; color: #F9AC00; }
+  a.dlbtn small { display: block; font-size: 13px; font-weight: 400; opacity: .9; }
+  a.dlbtn.single { flex: 0 1 auto; margin: 4px 0 12px; }
   button { cursor: pointer; border: 0; border-radius: 8px; padding: 11px 20px; font-size: 16px; font-weight: 700; font-family: inherit; }
   .primary { background: #004388; color: #fff; }
   .primary:hover { background: #00356b; }
@@ -46,12 +56,19 @@
       <span class="tag">HKBe · EXCEL</span>
       <h1>Excel Jump</h1>
       <p>Lauf durch die Welt und löse an jedem Posten die Aufgaben aus der Übungsdatei <b>HKBe_Excel_Funktionen_Uebungen.xlsx</b>. Erst wenn alle Antworten stimmen, öffnet sich das Tor zum nächsten Abschnitt.</p>
+      <div class="dl">
+        <h2>⬇ Zuerst: Übungsdateien herunterladen</h2>
+        <p>Ohne diese Excel-Dateien kannst du die Posten nicht lösen. Lade beide herunter und öffne Level 1.</p>
+        <div class="dlrow">
+          <a class="dlbtn" href="uebungen/HKBe_Excel_Funktionen_Uebungen.xlsx" download><span class="ico">📊</span><span><b>Level 1</b><small>Übungen mit Erklärungen</small></span></a>
+          <a class="dlbtn" href="uebungen/HKBe_Excel_Funktionen_Teil2.xlsx" download><span class="ico">📊</span><span><b>Level 2</b><small>Übungen ohne Hilfen</small></span></a>
+        </div>
+      </div>
       <div class="keys">
         <span><kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>D</kbd></span><span>laufen</span>
         <span><kbd>↑</kbd> / <kbd>W</kbd> / <kbd>Leertaste</kbd></span><span>springen</span>
         <span><kbd>E</kbd> / <kbd>Enter</kbd></span><span>Posten öffnen</span>
       </div>
-      <p class="small">Übungsdateien: <a href="uebungen/HKBe_Excel_Funktionen_Uebungen.xlsx" download>Level 1</a> · <a href="uebungen/HKBe_Excel_Funktionen_Teil2.xlsx" download>Level 2</a></p>
       <p class="small">Achtung vor Fehlerwerten wie <b>#DIV/0!</b> oder <b>#NV</b> (spring ihnen auf den Kopf!), Stacheln und Lücken. Wer scheitert, beginnt wieder am Start. Gelöste Posten bleiben gelöst.</p>
       <label for="nick">Dein Spielname (kein richtiger Name)</label>
       <input type="text" id="nick" maxlength="16" placeholder="z. B. ExcelNinja" autocomplete="off">
@@ -80,7 +97,8 @@
       <span class="tag">LEVEL GESCHAFFT</span>
       <h1>Weiter zu Level 2</h1>
       <p id="levelText"></p>
-      <p>Öffne jetzt die Datei <b id="levelFile"></b> (<a href="uebungen/HKBe_Excel_Funktionen_Teil2.xlsx" download>herunterladen</a>). Ab jetzt gibt es keine Hilfen mehr, und die Hindernisse werden mit jedem Posten schwieriger.</p>
+      <p>Öffne jetzt die Datei <b id="levelFile"></b>. Ab jetzt gibt es keine Hilfen mehr, und die Hindernisse werden mit jedem Posten schwieriger.</p>
+      <a class="dlbtn single" href="uebungen/HKBe_Excel_Funktionen_Teil2.xlsx" download><span class="ico">📊</span><span><b>Level 2 herunterladen</b><small>HKBe_Excel_Funktionen_Teil2.xlsx</small></span></a>
       <p class="small">Wenn du in Level 2 scheiterst, beginnst du am Anfang von Level 2.</p>
       <div class="row"><button class="primary" id="nextBtn">Level 2 starten</button></div>
     </div>
