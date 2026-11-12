@@ -35,6 +35,8 @@
   a.dlbtn b { display: block; font-size: 19px; color: #F9AC00; }
   a.dlbtn small { display: block; font-size: 13px; font-weight: 400; opacity: .9; }
   a.dlbtn.single { flex: 0 1 auto; margin: 4px 0 12px; }
+  .dl:focus { outline: none; }
+  .teacherTag { background: #AE2135 !important; }
   button { cursor: pointer; border: 0; border-radius: 8px; padding: 11px 20px; font-size: 16px; font-weight: 700; font-family: inherit; }
   .primary { background: #004388; color: #fff; }
   .primary:hover { background: #00356b; }
@@ -56,7 +58,7 @@
       <span class="tag">HKBe · EXCEL</span>
       <h1>Excel Jump</h1>
       <p>Lauf durch die Welt und löse an jedem Posten die Aufgaben aus der Übungsdatei <b>HKBe_Excel_Funktionen_Uebungen.xlsx</b>. Erst wenn alle Antworten stimmen, öffnet sich das Tor zum nächsten Abschnitt.</p>
-      <div class="dl">
+      <div class="dl" id="dlBox" tabindex="0">
         <h2>⬇ Zuerst: Übungsdateien herunterladen</h2>
         <p>Ohne diese Excel-Dateien kannst du die Posten nicht lösen. Lade beide herunter und öffne Level 1.</p>
         <div class="dlrow">
@@ -73,6 +75,17 @@
       <label for="nick">Dein Spielname (kein richtiger Name)</label>
       <input type="text" id="nick" maxlength="16" placeholder="z. B. ExcelNinja" autocomplete="off">
       <div class="row"><button class="primary" id="startBtn">Spiel starten</button></div>
+    </div>
+  </div>
+
+  <!-- Lehrermodus (versteckt) -->
+  <div class="overlay" id="teacherScreen">
+    <div class="card">
+      <span class="tag teacherTag">LEHRERMODUS</span>
+      <h2>Passwort</h2>
+      <input type="password" id="tPw" autocomplete="off" style="width:100%;padding:10px 12px;font-size:17px;border:2px solid #cfd8e3;border-radius:8px;font-family:inherit">
+      <div class="msg" id="tMsg"></div>
+      <div class="row"><button class="primary" id="tLoginBtn">Aktivieren</button><button class="ghost" id="tCancel">Abbrechen</button></div>
     </div>
   </div>
 
@@ -585,7 +598,7 @@ function checkPost() {
   def.qs.forEach((q, k) => {
     const inp = $("a" + k);
     const n = parseAnswer(inp.value, q.pct);
-    const ok = !isNaN(n) && Math.abs(n - q.a) <= q.tol + 1e-9;
+    const ok = TEACHER || (!isNaN(n) && Math.abs(n - q.a) <= q.tol + 1e-9);
     inp.classList.toggle("ok", ok); inp.classList.toggle("bad", !ok);
     if (ok) right++;
   });
@@ -633,6 +646,40 @@ function finish() {
   $("endWord").innerHTML = solutionWord().split("").map(c => `<span>${escapeHtml(c)}</span>`).join("");
   $("endScreen").classList.add("show");
 }
+
+/* =========================================================
+   LEHRERMODUS: Posten lassen sich ohne Lösungen bestätigen.
+   Öffnen: Auf dem Startbildschirm in den Download-Kasten klicken,
+   dann 3× Enter und 1× Leertaste. Passwort verschlüsselt gespeichert.
+   ========================================================= */
+let TEACHER = false, tSeq = [];
+$("dlBox").addEventListener("keydown", e => {
+  if (e.target !== $("dlBox")) return;
+  const now = Date.now();
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    tSeq.push({ k: e.key, t: now });
+    tSeq = tSeq.filter(x => now - x.t < 4000).slice(-4);
+    if (tSeq.map(x => x.k).join("|") === "Enter|Enter|Enter| ") {
+      tSeq = [];
+      $("tPw").value = ""; $("tMsg").textContent = ""; $("tMsg").className = "msg";
+      $("teacherScreen").classList.add("show");
+      setTimeout(() => $("tPw").focus(), 50);
+    }
+  } else tSeq = [];
+});
+function teacherLogin() {
+  const k = "kvBL-ExcelJump", v = $("tPw").value; let t = "";
+  for (let i = 0; i < v.length; i++) t += String.fromCharCode(v.charCodeAt(i) ^ k.charCodeAt(i % k.length));
+  if (btoa(t) === "PBMOI1sgPRsGCSY=") {
+    TEACHER = true;
+    $("tMsg").textContent = "Lehrermodus aktiv: Posten werden ohne Lösungen bestätigt."; $("tMsg").className = "msg ok";
+    setTimeout(() => $("teacherScreen").classList.remove("show"), 1200);
+  } else { $("tMsg").textContent = "Falsches Passwort."; $("tMsg").className = "msg bad"; $("tPw").select(); }
+}
+$("tLoginBtn").onclick = teacherLogin;
+$("tPw").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); teacherLogin(); } });
+$("tCancel").onclick = () => $("teacherScreen").classList.remove("show");
 
 /* Lösungswort verschlüsselt (XOR + Base64, gleicher Schlüssel wie Lösungen) */
 function solutionWord() {
@@ -839,6 +886,7 @@ function drawHUD() {
   ctx.fillStyle = "#fff"; ctx.fillText(`× ${state.coins}`, 204, 38);
   ctx.fillText(`⏱ ${fmtTime(state.time)}`, 285, 38);
   ctx.fillText(`✖ ${state.deaths}`, 370, 38);
+  if (TEACHER) { rr(12, 58, 150, 26, 8, "rgba(174,33,53,.92)"); ctx.fillStyle = "#fff"; ctx.font = "bold 13px Lato, Trebuchet MS, sans-serif"; ctx.fillText("LEHRERMODUS", 26, 76); ctx.font = "bold 16px Lato, Trebuchet MS, sans-serif"; }
   if (state.flash > 0) {
     ctx.globalAlpha = Math.min(1, state.flash);
     rr(W / 2 - 210, 80, 420, 46, 10, "rgba(174,33,53,.92)");
