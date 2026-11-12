@@ -16,13 +16,6 @@ Ein kleines Jump'n'Run-Spiel für den HKBe-Unterricht (KBS Liestal). Die Lernend
 - Wer in eine Lücke fällt, Stacheln oder einen Fehlerwert berührt, beginnt am Start des aktuellen Levels. Gelöste Posten bleiben gelöst.
 - Level 1 ist gleichbleibend einfach, in Level 2 wird es von Posten zu Posten schwieriger.
 
-## Online stellen mit GitHub Pages
-
-1. Den Inhalt dieses Ordners in ein GitHub-Repository hochladen (`index.html` muss im obersten Ordner liegen).
-2. Im Repository auf **Settings › Pages** gehen.
-3. Bei **Source** «Deploy from a branch» wählen, Branch `main` und Ordner `/ (root)`, dann speichern.
-4. Nach ein bis zwei Minuten ist das Spiel erreichbar unter `https://<benutzername>.github.io/<repository>/`.
-
 ## Hinweise
 
 - Die Lösungen sind im Code verschlüsselt, damit sie nicht direkt lesbar sind. Ganz verhindern lässt sich das Auslesen bei einem reinen Browserspiel aber nicht.
