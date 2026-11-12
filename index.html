@@ -249,7 +249,7 @@ function buildLevel() {
   const column = (x, h) => { for (let i = 1; i <= h; i++) set(x, 11 - i, "B"); };
   const spikes = (x1, x2) => { for (let x = x1; x <= x2; x++) set(x, 10, "^"); };
   const coin = (x, y) => coins.push({ x: x * T + T / 2, y: y * T + T / 2, taken: false });
-  const mover = (x1, x2, y, speed) => movers.push({ x: x1 * T, y: y * T, w: 3 * T, h: 16, min: x1 * T, max: x2 * T, vx: speed, dx: 0, wait: 0 });
+  const mover = (x1, x2, y, speed, w = 3) => movers.push({ x: x1 * T, y: y * T, w: w * T, h: 16, min: x1 * T, max: x2 * T, vx: speed, dx: 0, wait: 0 });
 
   ground(0, COLS - 1);
 
@@ -296,11 +296,15 @@ function buildLevel() {
   plat(fx - 4, fx - 2, 8, "B");
 }
 
-/* ---------- Level 2: jeder Posten etwas schwieriger ---------- */
+/* ---------- Level 2: Schwierigkeit steigt exponentiell ----------
+   f(i) = (1.4^i − 1) / (1.4^7 − 1)  →  0, .04, .10, .19, .30, .47, .70, 1
+   Damit bleiben die ersten Posten moderat, die letzten ziehen stark an. */
 function level2Section(i, x0, h) {
   const { set, gap, plat, column, spikes, coin, mover } = h;
   const lbl = ["#DIV/0!", "#NV", "#WERT!", "#BEZUG!", "#NAME?", "#ZAHL!", "#NULL!", "#DIV/0!"][i];
-  const spd = 75 + i * 10;                     // Gegner: 75 bis 145
+  const f = (Math.pow(1.4, i) - 1) / (Math.pow(1.4, 7) - 1);
+  const spd = Math.round(75 + 110 * f);        // Gegner: 75 … 185
+  const ms = Math.round(70 + 70 * f);          // bewegliche Plattformen: 70 … 140
   const enemy = (x, s = spd, row = 11) => enemies.push({ sx: x * T, sy: row * T - 30, x: x * T, y: row * T - 30, w: 32, h: 30, vx: -s, vy: 0, alive: true, label: lbl, squash: 0 });
   if (i === 0) {
     gap(x0 + 6, x0 + 7); coin(x0 + 6, 8); coin(x0 + 7, 8);
@@ -311,47 +315,52 @@ function level2Section(i, x0, h) {
     column(x0 + 4, 1); column(x0 + 5, 2); column(x0 + 6, 3);
     gap(x0 + 7, x0 + 9); coin(x0 + 8, 5);
     column(x0 + 10, 3); column(x0 + 11, 2); column(x0 + 12, 1);
-    spikes(x0 + 15, x0 + 16);
+    spikes(x0 + 15, x0 + 17);
     enemy(x0 + 20);
   } else if (i === 2) {
     enemy(x0 + 4);
     gap(x0 + 7, x0 + 14);
-    mover(x0 + 7, x0 + 12, 9, 75);
+    mover(x0 + 7, x0 + 12, 9, ms);
     for (let x = x0 + 9; x <= x0 + 12; x++) coin(x, 7);
-    spikes(x0 + 18, x0 + 19);
+    spikes(x0 + 17, x0 + 19);
     enemy(x0 + 21);
   } else if (i === 3) {
-    spikes(x0 + 5, x0 + 15);
-    plat(x0 + 3, x0 + 5, 8); plat(x0 + 7, x0 + 9, 6); plat(x0 + 11, x0 + 13, 7); plat(x0 + 15, x0 + 16, 8);
+    spikes(x0 + 4, x0 + 16);
+    plat(x0 + 3, x0 + 4, 8); plat(x0 + 7, x0 + 8, 6); plat(x0 + 11, x0 + 12, 7); plat(x0 + 15, x0 + 16, 8);
     coin(x0 + 8, 5); coin(x0 + 12, 6);
-    enemy(x0 + 20);
+    enemy(x0 + 19); enemy(x0 + 22);
   } else if (i === 4) {
-    gap(x0 + 5, x0 + 7); coin(x0 + 6, 7);
-    spikes(x0 + 11, x0 + 12);
-    enemy(x0 + 16); enemy(x0 + 20);
+    gap(x0 + 5, x0 + 8); coin(x0 + 6, 7); coin(x0 + 7, 7);
+    spikes(x0 + 11, x0 + 13);
+    enemy(x0 + 16); column(x0 + 18, 2); enemy(x0 + 21);
   } else if (i === 5) {
     gap(x0 + 4, x0 + 17);
-    mover(x0 + 4, x0 + 8, 9, 75);
-    mover(x0 + 11, x0 + 14, 9, 90);
-    coin(x0 + 10, 7); coin(x0 + 11, 7);
-    enemy(x0 + 21);
+    mover(x0 + 4, x0 + 8, 9, ms, 2);
+    mover(x0 + 11, x0 + 14, 8, Math.round(ms * 1.15), 2);
+    coin(x0 + 10, 7); coin(x0 + 13, 6);
+    spikes(x0 + 20, x0 + 21);
+    enemy(x0 + 23);
   } else if (i === 6) {
-    spikes(x0 + 4, x0 + 18);
+    spikes(x0 + 4, x0 + 19);
     plat(x0 + 3, x0 + 4, 8);
-    plat(x0 + 7, x0 + 9, 6); enemy(x0 + 8, 40, 6);
+    plat(x0 + 7, x0 + 9, 6); enemy(x0 + 8, 55, 6);
     plat(x0 + 12, x0 + 13, 7);
-    plat(x0 + 16, x0 + 17, 8);
-    coin(x0 + 12, 6); coin(x0 + 16, 7);
-    enemy(x0 + 21);
+    plat(x0 + 16, x0 + 16, 6, "B");
+    plat(x0 + 19, x0 + 19, 8, "B");
+    coin(x0 + 12, 6); coin(x0 + 16, 5);
+    enemy(x0 + 21); enemy(x0 + 23);
   } else {
-    enemy(x0 + 3, 110);
-    gap(x0 + 6, x0 + 13);
-    mover(x0 + 6, x0 + 10, 9, 95);
-    coin(x0 + 8, 7); coin(x0 + 11, 7);
-    spikes(x0 + 15, x0 + 20);
-    plat(x0 + 15, x0 + 16, 8); plat(x0 + 19, x0 + 20, 7);
-    coin(x0 + 16, 7); coin(x0 + 19, 6);
-    enemy(x0 + 23, 120);
+    // Posten 8: alles zusammen, schnell – aber lösbar
+    enemy(x0 + 3); column(x0 + 5, 2);
+    gap(x0 + 7, x0 + 14);
+    mover(x0 + 7, x0 + 12, 9, ms, 2);
+    coin(x0 + 9, 7); coin(x0 + 12, 7);
+    spikes(x0 + 16, x0 + 21);
+    plat(x0 + 16, x0 + 16, 8, "B");
+    plat(x0 + 18, x0 + 19, 6); enemy(x0 + 18, 60, 6);
+    plat(x0 + 21, x0 + 21, 8, "B");
+    coin(x0 + 16, 7); coin(x0 + 21, 7);
+    enemy(x0 + 23);
   }
 }
 
@@ -719,7 +728,7 @@ function drawMovers() {
     const px = m.x - cam; if (px < -150 || px > W + 50) continue;
     rr(px, m.y, m.w, m.h, 6, C.gold);
     ctx.fillStyle = "rgba(255,255,255,.45)"; ctx.fillRect(px + 6, m.y + 3, m.w - 12, 4);
-    ctx.fillStyle = "#b37b00"; for (let k = 1; k < 3; k++) ctx.fillRect(px + k * T - 1, m.y + 2, 2, m.h - 4);
+    ctx.fillStyle = "#b37b00"; for (let k = 1; k < m.w / T; k++) ctx.fillRect(px + k * T - 1, m.y + 2, 2, m.h - 4);
   }
 }
 
