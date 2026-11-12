@@ -443,8 +443,9 @@ function burst(x, y, color, n = 12) {
 }
 
 function update(dt) {
+  // Echtzeit seit Spielstart (zählt auch in Posten, Zwischenbildschirm und anderen Tabs)
+  if (state.startedAt && !state.endedAt) state.time = (Date.now() - state.startedAt) / 1000;
   if (state.mode !== "play") { updateGates(dt); return; }
-  state.time += dt;
   const p = player;
 
   // Steuerung
@@ -602,6 +603,7 @@ function startGame() {
   const nick = $("nick").value.trim() || "Gast";
   state.nick = nick.slice(0, 16);
   $("startScreen").classList.remove("show");
+  state.startedAt = Date.now();
   state.mode = "play";
 }
 $("startBtn").onclick = startGame;
@@ -616,8 +618,9 @@ function finish() {
     return;
   }
   state.mode = "end";
-  const m = Math.floor(state.time / 60), s = Math.floor(state.time % 60);
-  $("endText").innerHTML = `Super, <b>${escapeHtml(state.nick)}</b>! Du hast beide Level mit allen Posten gelöst.<br>Zeit: <b>${m}:${String(s).padStart(2, "0")}</b> · Münzen: <b>${state.coins}</b> · Neustarts: <b>${state.deaths}</b>`;
+  state.endedAt = Date.now();
+  state.time = (state.endedAt - state.startedAt) / 1000;
+  $("endText").innerHTML = `Super, <b>${escapeHtml(state.nick)}</b>! Du hast beide Level mit allen Posten gelöst.<br>Zeit: <b>${fmtTime(state.time)}</b> · Münzen: <b>${state.coins}</b> · Neustarts: <b>${state.deaths}</b>`;
   $("endWord").innerHTML = solutionWord().split("").map(c => `<span>${escapeHtml(c)}</span>`).join("");
   $("endScreen").classList.add("show");
 }
@@ -628,7 +631,13 @@ function solutionWord() {
   let t = ""; for (let i = 0; i < b.length; i++) t += String.fromCharCode(b.charCodeAt(i) ^ k.charCodeAt(i % k.length));
   return t;
 }
-$("againBtn").onclick = () => { $("endScreen").classList.remove("show"); const n = state.nick; reset(); state.nick = n; state.mode = "play"; };
+$("againBtn").onclick = () => { $("endScreen").classList.remove("show"); const n = state.nick; reset(); state.nick = n; state.startedAt = Date.now(); state.mode = "play"; };
+
+function fmtTime(sec) {
+  sec = Math.floor(sec);
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0");
+}
 $("nextBtn").onclick = () => { $("levelScreen").classList.remove("show"); startLevel(state.level + 1); state.mode = "play"; };
 
 function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
@@ -816,11 +825,10 @@ function drawParticles() {
 function drawHUD() {
   rr(12, 12, 440, 40, 10, "rgba(0,67,136,.88)");
   ctx.fillStyle = "#fff"; ctx.font = "bold 16px Lato, Trebuchet MS, sans-serif";
-  const m = Math.floor(state.time / 60), s = Math.floor(state.time % 60);
   ctx.fillText(`L${state.level} · Posten ${state.solved}/${POSTS.length}`, 26, 38);
   ctx.fillStyle = C.gold; ctx.beginPath(); ctx.arc(190, 32, 8, 0, 7); ctx.fill();
   ctx.fillStyle = "#fff"; ctx.fillText(`× ${state.coins}`, 204, 38);
-  ctx.fillText(`⏱ ${m}:${String(s).padStart(2, "0")}`, 285, 38);
+  ctx.fillText(`⏱ ${fmtTime(state.time)}`, 285, 38);
   ctx.fillText(`✖ ${state.deaths}`, 370, 38);
   if (state.flash > 0) {
     ctx.globalAlpha = Math.min(1, state.flash);
