@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Excel Jump – HKBe</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #0b1d33; font-family: "Lato", "Trebuchet MS", sans-serif; overflow: hidden; }
+  #wrap { position: relative; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; image-rendering: pixelated; background: #8fd3ff; box-shadow: 0 10px 40px rgba(0,0,0,.5); border-radius: 6px; }
+  .overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0, 25, 55, .72); z-index: 10; }
+  .overlay.show { display: flex; }
+  .card { background: #fff; border-radius: 14px; padding: 26px 30px; width: min(560px, 92vw); max-height: 90vh; overflow: auto; box-shadow: 0 20px 60px rgba(0,0,0,.4); border-top: 8px solid #F9AC00; }
+  .card h1 { margin: 0 0 4px; color: #004388; font-size: 30px; font-weight: 900; }
+  .card h2 { margin: 0 0 6px; color: #004388; font-size: 22px; }
+  .card p { margin: 6px 0 14px; color: #333; line-height: 1.45; }
+  a { color: #0095DA; font-weight: 700; }
+  .small { font-size: 13px; color: #6E6E6E !important; }
+  label { display: block; font-weight: 700; color: #004388; margin: 14px 0 6px; font-size: 15px; }
+  input[type=text] { width: 100%; padding: 10px 12px; font-size: 17px; border: 2px solid #cfd8e3; border-radius: 8px; outline: none; font-family: inherit; }
+  input[type=text]:focus { border-color: #0095DA; }
+  input.ok { border-color: #11A759; background: #eafaf1; }
+  input.bad { border-color: #AE2135; background: #fdecee; }
+  .row { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+  .word { display: flex; gap: 8px; justify-content: center; margin: 6px 0 12px; }
+  .word span { width: 52px; height: 60px; display: flex; align-items: center; justify-content: center; background: #004388; color: #F9AC00; font-size: 34px; font-weight: 900; border-radius: 8px; box-shadow: 0 4px 0 #F9AC00; }
+  button { cursor: pointer; border: 0; border-radius: 8px; padding: 11px 20px; font-size: 16px; font-weight: 700; font-family: inherit; }
+  .primary { background: #004388; color: #fff; }
+  .primary:hover { background: #00356b; }
+  .ghost { background: #eef2f6; color: #004388; }
+  .msg { margin-top: 12px; font-weight: 700; min-height: 22px; }
+  .msg.ok { color: #11A759; } .msg.bad { color: #AE2135; }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 14px; color: #333; margin: 10px 0 4px; }
+  kbd { background: #eef2f6; border: 1px solid #cfd8e3; border-bottom-width: 3px; border-radius: 5px; padding: 1px 7px; font-family: inherit; font-weight: 700; color: #004388; }
+  .tag { display: inline-block; background: #F9AC00; color: #fff; font-weight: 900; border-radius: 6px; padding: 2px 10px; font-size: 13px; letter-spacing: .5px; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="960" height="520"></canvas>
+
+  <!-- Startbildschirm -->
+  <div class="overlay show" id="startScreen">
+    <div class="card">
+      <span class="tag">HKBe · EXCEL</span>
+      <h1>Excel Jump</h1>
+      <p>Lauf durch die Welt und löse an jedem Posten die Aufgaben aus der Übungsdatei <b>HKBe_Excel_Funktionen_Uebungen.xlsx</b>. Erst wenn alle Antworten stimmen, öffnet sich das Tor zum nächsten Abschnitt.</p>
+      <div class="keys">
+        <span><kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>D</kbd></span><span>laufen</span>
+        <span><kbd>↑</kbd> / <kbd>W</kbd> / <kbd>Leertaste</kbd></span><span>springen</span>
+        <span><kbd>E</kbd> / <kbd>Enter</kbd></span><span>Posten öffnen</span>
+      </div>
+      <p class="small">Übungsdateien: <a href="uebungen/HKBe_Excel_Funktionen_Uebungen.xlsx" download>Level 1</a> · <a href="uebungen/HKBe_Excel_Funktionen_Teil2.xlsx" download>Level 2</a></p>
+      <p class="small">Achtung vor Fehlerwerten wie <b>#DIV/0!</b> oder <b>#NV</b> (spring ihnen auf den Kopf!), Stacheln und Lücken. Wer scheitert, beginnt wieder am Start. Gelöste Posten bleiben gelöst.</p>
+      <label for="nick">Dein Spielname (kein richtiger Name)</label>
+      <input type="text" id="nick" maxlength="16" placeholder="z. B. ExcelNinja" autocomplete="off">
+      <div class="row"><button class="primary" id="startBtn">Spiel starten</button></div>
+    </div>
+  </div>
+
+  <!-- Posten -->
+  <div class="overlay" id="postScreen">
+    <div class="card">
+      <span class="tag" id="postTag">POSTEN 1 / 8</span>
+      <h2 id="postTitle">SUMME</h2>
+      <p id="postIntro"></p>
+      <form id="postForm" autocomplete="off"></form>
+      <div class="msg" id="postMsg"></div>
+      <div class="row">
+        <button class="primary" id="checkBtn">Prüfen</button>
+        <button class="ghost" id="closeBtn">Schliessen (Esc)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Level geschafft -->
+  <div class="overlay" id="levelScreen">
+    <div class="card">
+      <span class="tag">LEVEL GESCHAFFT</span>
+      <h1>Weiter zu Level 2</h1>
+      <p id="levelText"></p>
+      <p>Öffne jetzt die Datei <b id="levelFile"></b> (<a href="uebungen/HKBe_Excel_Funktionen_Teil2.xlsx" download>herunterladen</a>). Ab jetzt gibt es keine Hilfen mehr, und die Hindernisse werden mit jedem Posten schwieriger.</p>
+      <p class="small">Wenn du in Level 2 scheiterst, beginnst du am Anfang von Level 2.</p>
+      <div class="row"><button class="primary" id="nextBtn">Level 2 starten</button></div>
+    </div>
+  </div>
+
+  <!-- Ziel -->
+  <div class="overlay" id="endScreen">
+    <div class="card">
+      <span class="tag">GESCHAFFT</span>
+      <h1>Ziel erreicht!</h1>
+      <p id="endText"></p>
+      <h2>Lösungswort</h2>
+      <div class="word" id="endWord"></div>
+      <p><b>Gib das Lösungswort sofort deiner Lehrperson an – wer es zuerst meldet, gewinnt!</b> Verrate es niemandem.</p>
+      <div class="row"><button class="primary" id="againBtn">Nochmals spielen</button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   POSTEN UND LÖSUNGEN
+   (Passend zu HKBe_Excel_Funktionen_Uebungen.xlsx)
+   tol = erlaubte Abweichung, pct = Prozentwert (53.2 oder 0.532)
+   ========================================================= */
+const LEVEL1 = [
+  { sheet: "SUMME", qs: [
+    { q: "Aufgabe 1: Wie hoch ist der Wochenumsatz des Schulkiosks in CHF?", tol: 0.005 },
+    { q: "Aufgabe 2: Wie viele Punkte hat die ganze Klasse zusammen?", tol: 0 } ] },
+  { sheet: "MIN", qs: [
+    { q: "Aufgabe 1: Wie tief war die tiefste Temperatur der Woche in °C?", tol: 0.005 },
+    { q: "Aufgabe 2: Wie viel kostet der günstigste Laptop in CHF?", tol: 0.005 } ] },
+  { sheet: "MITTELWERT", qs: [
+    { q: "Aufgabe 1: Wie hoch ist der Notendurchschnitt? (2 Kommastellen)", tol: 0.005 },
+    { q: "Aufgabe 2: Durchschnitt der linken Tabelle (August leer), auf ganze Besucher gerundet?", tol: 0.6 },
+    { q: "Aufgabe 2: Durchschnitt der rechten Tabelle (August = 0), auf ganze Besucher gerundet?", tol: 0.6 } ] },
+  { sheet: "RUNDEN", qs: [
+    { q: "Aufgabe 1: Welcher Preis steht bei der Tastatur in der Spalte «auf 2 Stellen»?", tol: 0.001 },
+    { q: "Aufgabe 2: Welche Zahl steht bei Gemeinde 2 in der Spalte «auf Tausender»?", tol: 0 } ] },
+  { sheet: "VRUNDEN", qs: [
+    { q: "Aufgabe 1: Welcher Betrag steht bei Einkauf 4 in der Spalte «auf 5 Rappen»?", tol: 0.001 },
+    { q: "Aufgabe 2: Wie hoch ist das Total der ausbezahlten Spesen in CHF?", tol: 0.001 } ] },
+  { sheet: "ANZAHL2", qs: [
+    { q: "Aufgabe 1: Wie viele Personen sind für das Skilager angemeldet?", tol: 0 },
+    { q: "Aufgabe 2: Wie viele Geräte haben eine Bemerkung?", tol: 0 },
+    { q: "Aufgabe 3: Wie viele Lernende haben noch nicht bezahlt?", tol: 0 } ] },
+  { sheet: "Datumsdifferenz", qs: [
+    { q: "Aufgabe 1: Wie viele Tage dauert der Sprachaufenthalt in London?", tol: 0 },
+    { q: "Aufgabe 2: Wie viele Tage liegen zwischen der ältesten und der jüngsten Person?", tol: 0 } ] },
+  { sheet: "Absoluter Bezug", qs: [
+    { q: "Aufgabe 1: Wie gross ist der Anteil der Getränke am Gesamtumsatz in %? (1 Kommastelle)", tol: 0.06, pct: true },
+    { q: "Aufgabe 2: Wie viel kostet der Monitor inkl. MWST in CHF?", tol: 0.006 } ] },
+];
+
+/* Level 2: HKBe_Excel_Funktionen_Teil2.xlsx */
+const LEVEL2 = [
+  { sheet: "Posten 1", qs: [
+    { q: "Aufgabe 1: Wie hoch ist das Total der bar bezahlten Beträge in CHF?", tol: 0.005 },
+    { q: "Aufgabe 2: Wie hoch ist das Total aller verrechneten Taxifahrten in CHF?", tol: 0.005 } ] },
+  { sheet: "Posten 2", qs: [
+    { q: "Aufgabe 1: Wie viele Bücher sind zurzeit ausgeliehen?", tol: 0 },
+    { q: "Aufgabe 2: Wie viele Personen haben an der Umfrage teilgenommen?", tol: 0 },
+    { q: "Aufgabe 2: Wie viele Personen haben eine Zahl angegeben?", tol: 0 } ] },
+  { sheet: "Posten 3", qs: [
+    { q: "Aufgabe 1: Wie viel kostet das Hotel Lissabon in CHF? (2 Kommastellen)", tol: 0.006 },
+    { q: "Aufgabe 2: Wie viel Prozent der Stimmen hat Costa Mia erhalten? (1 Kommastelle)", tol: 0.06, pct: true } ] },
+  { sheet: "Posten 4", qs: [
+    { q: "Aufgabe 1: Welches ist die beste Zeit in Sekunden?", tol: 0.001 },
+    { q: "Aufgabe 2: Wie gross ist der kleinste Lagerbestand?", tol: 0 } ] },
+  { sheet: "Posten 5", qs: [
+    { q: "Aufgabe 1: Wie viele Tage war das Tablet ausgeliehen?", tol: 0 },
+    { q: "Aufgabe 2: Wie viele Tage dauert die Lehre?", tol: 0 } ] },
+  { sheet: "Posten 6", qs: [
+    { q: "Aufgabe 1: Wie viele Runden hat die Klasse insgesamt gelaufen?", tol: 0 },
+    { q: "Aufgabe 2: Wie hoch ist das Total aller Ausgaben im Klassenlager in CHF?", tol: 0.005 } ] },
+  { sheet: "Posten 7", qs: [
+    { q: "Aufgabe 1: Welcher gerundete Wert steht beim Donnerstag?", tol: 0.001 },
+    { q: "Aufgabe 2: Welche gerundete Zuschauerzahl steht bei Spiel 5?", tol: 0 } ] },
+  { sheet: "Posten 8", qs: [
+    { q: "Aufgabe 1: Wie viele Punkte hat die Klasse im Durchschnitt erreicht? (2 Kommastellen)", tol: 0.005 },
+    { q: "Aufgabe 2: Wie viele Schritte ist er durchschnittlich gegangen? (ganze Zahl)", tol: 0.6 } ] },
+];
+
+
+/* Lösungen verschlüsselt, damit sie im Quellcode nicht direkt lesbar sind */
+(function () {
+  const k = "kvBL-ExcelJump", b = atob("MERyfBprS09FX3tMQ0BHVm96A3ZUQ1RcfUFDRUdWdmIVdktQSUx4QF1FRU9ydQFlSlFcW2RFVUNHVnR9A3xOT0Vee0VdQEVGbmwcdUtNUkBqRl5ERUNubBVrSE9FWGRFQVBYWHJgDXdJTVVAakRfR1pObHwBZU1QS15+Q1VcS0JwfANwSFpJTHxFQ0dHVnN5GWtIT0VaZEVBUFpHbHwBZUBNVUBqQl9eWk9wYA1xSE1cXHNZTUFbWHZ7AWVJUUtcZlVZQkVGbmwcdUBVS1xmVVxAU1hyYA10S1NXQn1AQVBdWHFgDXBOU1VCellNQlpYd2ANfUBWVUJ5TVgt");
+  let t = ""; for (let i = 0; i < b.length; i++) t += String.fromCharCode(b.charCodeAt(i) ^ k.charCodeAt(i % k.length));
+  const v = JSON.parse(t); let n = 0;
+  for (const lv of [LEVEL1, LEVEL2]) for (const p of lv) for (const q of p.qs) q.a = v[n++];
+})();
+
+const LEVELS = [
+  { posts: LEVEL1, file: "HKBe_Excel_Funktionen_Uebungen.xlsx" },
+  { posts: LEVEL2, file: "HKBe_Excel_Funktionen_Teil2.xlsx" },
+];
+let POSTS = LEVEL1;
+
+function parseAnswer(raw, pct) {
+  let s = String(raw).trim()
+    .replace(/[−–]/g, "-")
+    .replace(/CHF|Fr\.?|Tage?|Punkte|°C|%/gi, "")
+    .replace(/['’\s]/g, "")
+    .replace(",", ".");
+  if (s === "" || isNaN(Number(s))) return NaN;
+  let n = Number(s);
+  if (pct && Math.abs(n) <= 1) n *= 100;
+  return n;
+}
+
+/* =========================================================
+   GRUNDEINSTELLUNGEN
+   ========================================================= */
+const cvs = document.getElementById("game");
+const ctx = cvs.getContext("2d");
+const W = cvs.width, H = cvs.height;
+const T = 40;                 // Kachelgrösse
+const ROWS = 13;
+const SEC = 30;               // Breite eines Abschnitts in Kacheln
+const START_PAD = 8;
+const GRAV = 2100, JUMP = 780, SPEED = 270;
+
+const C = { blue: "#004388", gold: "#F9AC00", light: "#0095DA", green: "#11A759", red: "#AE2135" };
+
+let map, COLS, enemies, coins, posts, gates, movers, flag, player, cam, state, keys = {};
+
+function resize() {
+  const s = Math.min(window.innerWidth / W, window.innerHeight / H) * 0.98;
+  cvs.style.width = (W * s) + "px";
+  cvs.style.height = (H * s) + "px";
+}
+window.addEventListener("resize", resize); resize();
+
+/* =========================================================
+   LEVEL AUFBAUEN
+   Zeichen: # Boden, = Plattform, B Block, | Tor, ^ Stacheln
+   Pro Abschnitt wird es etwas schwieriger (schnellere Gegner).
+   ========================================================= */
+function buildLevel() {
+  COLS = START_PAD + POSTS.length * SEC + 22;
+  map = Array.from({ length: ROWS }, () => Array(COLS).fill(" "));
+  enemies = []; coins = []; posts = []; gates = []; movers = [];
+
+  const set = (x, y, ch) => { if (x >= 0 && x < COLS && y >= 0 && y < ROWS) map[y][x] = ch; };
+  const ground = (x1, x2) => { for (let x = x1; x <= x2; x++) { set(x, 11, "#"); set(x, 12, "#"); } };
+  const gap = (x1, x2) => { for (let x = x1; x <= x2; x++) { set(x, 11, " "); set(x, 12, " "); } };
+  const plat = (x1, x2, y, ch = "=") => { for (let x = x1; x <= x2; x++) set(x, y, ch); };
+  const column = (x, h) => { for (let i = 1; i <= h; i++) set(x, 11 - i, "B"); };
+  const spikes = (x1, x2) => { for (let x = x1; x <= x2; x++) set(x, 10, "^"); };
+  const coin = (x, y) => coins.push({ x: x * T + T / 2, y: y * T + T / 2, taken: false });
+  const mover = (x1, x2, y, speed) => movers.push({ x: x1 * T, y: y * T, w: 3 * T, h: 16, min: x1 * T, max: x2 * T, vx: speed, dx: 0, wait: 0 });
+
+  ground(0, COLS - 1);
+
+  const L2 = state.level === 2;
+  for (let i = 0; i < POSTS.length; i++) {
+    const x0 = START_PAD + i * SEC;
+    if (L2) {
+      level2Section(i, x0, { set, gap, plat, column, spikes, coin, mover });
+    } else {
+    // Level 1: einfach, ohne steigende Schwierigkeit
+    const v = i % 4;
+    const lbl = ["#DIV/0!", "#NV", "#WERT!", "#BEZUG!"][i % 4];
+    const enemy = (x) => enemies.push({ sx: x * T, sy: 11 * T - 30, x: x * T, y: 11 * T - 30, w: 32, h: 30, vx: -65, vy: 0, alive: true, label: lbl, squash: 0 });
+    if (v === 0) {
+      plat(x0 + 4, x0 + 7, 8); for (let x = x0 + 4; x <= x0 + 7; x++) coin(x, 7);
+      gap(x0 + 9, x0 + 10);
+      enemy(x0 + 14);
+      plat(x0 + 16, x0 + 19, 7, "B"); for (let x = x0 + 16; x <= x0 + 19; x++) coin(x, 6);
+    } else if (v === 1) {
+      column(x0 + 5, 1); column(x0 + 6, 2); column(x0 + 7, 3);
+      gap(x0 + 8, x0 + 10); coin(x0 + 8, 6); coin(x0 + 9, 5); coin(x0 + 10, 6);
+      column(x0 + 11, 3); column(x0 + 12, 2); column(x0 + 13, 1);
+      enemy(x0 + 18);
+    } else if (v === 2) {
+      plat(x0 + 4, x0 + 7, 8); plat(x0 + 9, x0 + 12, 5);
+      for (let x = x0 + 9; x <= x0 + 12; x++) coin(x, 4);
+      gap(x0 + 15, x0 + 17); plat(x0 + 16, x0 + 16, 9, "B");
+      spikes(x0 + 20, x0 + 20);
+      enemy(x0 + 6);
+    } else {
+      column(x0 + 6, 2); column(x0 + 12, 3);
+      enemy(x0 + 9);
+      gap(x0 + 16, x0 + 17); coin(x0 + 16, 7); coin(x0 + 17, 7);
+      plat(x0 + 19, x0 + 21, 8); coin(x0 + 19, 7); coin(x0 + 20, 7); coin(x0 + 21, 7);
+    }
+    }
+    // Posten und Tor
+    posts.push({ idx: i, x: (x0 + 24) * T, y: 11 * T - 90, w: 60, h: 90, solved: false });
+    gates.push({ col: x0 + 28, open: false, anim: 0 });
+    for (let y = 0; y <= 10; y++) set(x0 + 28, y, "|");
+  }
+  const fx = START_PAD + POSTS.length * SEC + 10;
+  flag = { x: fx * T, y: 11 * T - 280, h: 280 };
+  plat(fx - 4, fx - 2, 8, "B");
+}
+
+/* ---------- Level 2: jeder Posten etwas schwieriger ---------- */
+function level2Section(i, x0, h) {
+  const { set, gap, plat, column, spikes, coin, mover } = h;
+  const lbl = ["#DIV/0!", "#NV", "#WERT!", "#BEZUG!", "#NAME?", "#ZAHL!", "#NULL!", "#DIV/0!"][i];
+  const spd = 75 + i * 10;                     // Gegner: 75 bis 145
+  const enemy = (x, s = spd, row = 11) => enemies.push({ sx: x * T, sy: row * T - 30, x: x * T, y: row * T - 30, w: 32, h: 30, vx: -s, vy: 0, alive: true, label: lbl, squash: 0 });
+  if (i === 0) {
+    gap(x0 + 6, x0 + 7); coin(x0 + 6, 8); coin(x0 + 7, 8);
+    spikes(x0 + 12, x0 + 12);
+    enemy(x0 + 17);
+    plat(x0 + 19, x0 + 21, 8); for (let x = x0 + 19; x <= x0 + 21; x++) coin(x, 7);
+  } else if (i === 1) {
+    column(x0 + 4, 1); column(x0 + 5, 2); column(x0 + 6, 3);
+    gap(x0 + 7, x0 + 9); coin(x0 + 8, 5);
+    column(x0 + 10, 3); column(x0 + 11, 2); column(x0 + 12, 1);
+    spikes(x0 + 15, x0 + 16);
+    enemy(x0 + 20);
+  } else if (i === 2) {
+    enemy(x0 + 4);
+    gap(x0 + 7, x0 + 14);
+    mover(x0 + 7, x0 + 12, 9, 75);
+    for (let x = x0 + 9; x <= x0 + 12; x++) coin(x, 7);
+    spikes(x0 + 18, x0 + 19);
+    enemy(x0 + 21);
+  } else if (i === 3) {
+    spikes(x0 + 5, x0 + 15);
+    plat(x0 + 3, x0 + 5, 8); plat(x0 + 7, x0 + 9, 6); plat(x0 + 11, x0 + 13, 7); plat(x0 + 15, x0 + 16, 8);
+    coin(x0 + 8, 5); coin(x0 + 12, 6);
+    enemy(x0 + 20);
+  } else if (i === 4) {
+    gap(x0 + 5, x0 + 7); coin(x0 + 6, 7);
+    spikes(x0 + 11, x0 + 12);
+    enemy(x0 + 16); enemy(x0 + 20);
+  } else if (i === 5) {
+    gap(x0 + 4, x0 + 17);
+    mover(x0 + 4, x0 + 8, 9, 75);
+    mover(x0 + 11, x0 + 14, 9, 90);
+    coin(x0 + 10, 7); coin(x0 + 11, 7);
+    enemy(x0 + 21);
+  } else if (i === 6) {
+    spikes(x0 + 4, x0 + 18);
+    plat(x0 + 3, x0 + 4, 8);
+    plat(x0 + 7, x0 + 9, 6); enemy(x0 + 8, 40, 6);
+    plat(x0 + 12, x0 + 13, 7);
+    plat(x0 + 16, x0 + 17, 8);
+    coin(x0 + 12, 6); coin(x0 + 16, 7);
+    enemy(x0 + 21);
+  } else {
+    enemy(x0 + 3, 110);
+    gap(x0 + 6, x0 + 13);
+    mover(x0 + 6, x0 + 10, 9, 95);
+    coin(x0 + 8, 7); coin(x0 + 11, 7);
+    spikes(x0 + 15, x0 + 20);
+    plat(x0 + 15, x0 + 16, 8); plat(x0 + 19, x0 + 20, 7);
+    coin(x0 + 16, 7); coin(x0 + 19, 6);
+    enemy(x0 + 23, 120);
+  }
+}
+
+function solid(cx, cy) {
+  if (cx < 0 || cx >= COLS) return true;
+  if (cy < 0) return false;
+  if (cy >= ROWS || isNaN(cy)) return false;
+  const ch = map[cy][cx];
+  return ch === "#" || ch === "=" || ch === "B" || ch === "|";
+}
+
+/* =========================================================
+   SPIELZUSTAND
+   ========================================================= */
+function reset() {
+  state = { mode: "start", level: 1, coins: 0, solved: 0, time: 0, deaths: 0, flash: 0, nearPost: null, postCooldown: null, activePost: null, particles: [], nick: "" };
+  startLevel(1);
+}
+
+function startLevel(n) {
+  state.level = n;
+  POSTS = LEVELS[n - 1].posts;
+  state.solved = 0; state.nearPost = null; state.postCooldown = null; state.particles = [];
+  buildLevel();
+  player = { x: 3 * T, y: 11 * T - 38, w: 26, h: 38, vx: 0, vy: 0, onGround: false, face: 1, walk: 0, cp: { x: 3 * T, y: 11 * T - 38 }, blink: 0, riding: null };
+  cam = 0; keys = {};
+}
+
+/* =========================================================
+   EINGABE
+   ========================================================= */
+window.addEventListener("keydown", e => {
+  if (state.mode !== "play") {
+    if (state.mode === "post" && e.key === "Escape") closePost();
+    return;
+  }
+  keys[e.key.toLowerCase()] = true;
+  if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(e.key.toLowerCase())) e.preventDefault();
+  if ((e.key === "e" || e.key === "E" || e.key === "Enter") && state.nearPost) openPost(state.nearPost);
+});
+window.addEventListener("keyup", e => { keys[e.key.toLowerCase()] = false; });
+
+const left = () => keys["arrowleft"] || keys["a"];
+const right = () => keys["arrowright"] || keys["d"];
+const jump = () => keys["arrowup"] || keys["w"] || keys[" "];
+
+/* =========================================================
+   PHYSIK
+   ========================================================= */
+function moveBody(b, dt) {
+  // horizontal
+  b.x += b.vx * dt;
+  let top = Math.floor(b.y / T), bot = Math.floor((b.y + b.h - 1) / T);
+  if (b.vx > 0) {
+    const cx = Math.floor((b.x + b.w) / T);
+    for (let cy = top; cy <= bot; cy++) if (solid(cx, cy)) { b.x = cx * T - b.w; b.hitX = true; break; }
+  } else if (b.vx < 0) {
+    const cx = Math.floor(b.x / T);
+    for (let cy = top; cy <= bot; cy++) if (solid(cx, cy)) { b.x = (cx + 1) * T; b.hitX = true; break; }
+  }
+  // vertikal
+  b.vy = Math.min(b.vy + GRAV * dt, 1100);
+  b.y += b.vy * dt;
+  b.onGround = false;
+  const l = Math.floor(b.x / T), r = Math.floor((b.x + b.w - 1) / T);
+  if (b.vy > 0) {
+    const cy = Math.floor((b.y + b.h) / T);
+    for (let cx = l; cx <= r; cx++) if (solid(cx, cy)) { b.y = cy * T - b.h; b.vy = 0; b.onGround = true; break; }
+  } else if (b.vy < 0) {
+    const cy = Math.floor(b.y / T);
+    for (let cx = l; cx <= r; cx++) if (solid(cx, cy)) { b.y = (cy + 1) * T; b.vy = 0; break; }
+  }
+}
+
+const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+
+function respawn() {
+  // Gescheitert: zurück an den Start. Gelöste Posten bleiben gelöst.
+  burst(player.x + 13, Math.min(player.y, ROWS * T - 20), C.blue, 18);
+  player.x = 3 * T; player.y = 11 * T - player.h; player.vx = 0; player.vy = 0;
+  player.blink = 1.2; player.riding = null;
+  cam = 0;
+  state.deaths++; state.flash = 1.6;
+  for (const e of enemies) { e.x = e.sx; e.y = e.sy; e.vy = 0; e.alive = true; e.squash = 0; e.vx = -Math.abs(e.vx); }
+}
+
+function burst(x, y, color, n = 12) {
+  for (let i = 0; i < n; i++) state.particles.push({ x, y, vx: (Math.random() - .5) * 320, vy: -Math.random() * 380, life: .8, color });
+}
+
+function update(dt) {
+  if (state.mode !== "play") { updateGates(dt); return; }
+  state.time += dt;
+  const p = player;
+
+  // Steuerung
+  const target = (right() ? 1 : 0) - (left() ? 1 : 0);
+  p.vx += (target * SPEED - p.vx) * Math.min(1, dt * (p.onGround ? 14 : 6));
+  if (target) p.face = target;
+  // bewegliche Plattformen
+  for (const m of movers) {
+    const ox = m.x;
+    if (m.wait > 0) m.wait -= dt;                  // kurze Pause an den Enden
+    else {
+      m.x += m.vx * dt;
+      if (m.x < m.min || m.x > m.max) { m.vx *= -1; m.x = Math.max(m.min, Math.min(m.max, m.x)); m.wait = 1.0; }
+    }
+    m.dx = m.x - ox;
+  }
+  if (p.riding) { p.x += p.riding.dx; }
+  const wasOnMover = !!p.riding;
+  // Sprunghilfe: kurz nach dem Verlassen einer Kante darf man noch springen,
+  // und ein etwas zu früher Tastendruck wird gespeichert.
+  p.coyote = (p.onGround || wasOnMover) ? 0.1 : Math.max(0, (p.coyote || 0) - dt);
+  const jp = jump();
+  if (jp && !p.jumpHeld) p.buffer = 0.12; else p.buffer = Math.max(0, (p.buffer || 0) - dt);
+  p.jumpHeld = jp;
+  if (p.buffer > 0 && p.coyote > 0) { p.vy = -JUMP; p.onGround = false; p.riding = null; p.coyote = 0; p.buffer = 0; }
+  if (!jump() && p.vy < -300) p.vy = -300;           // kurzer Sprung bei kurzem Tastendruck
+  const prevBottom = p.y + p.h;
+  moveBody(p, dt);
+  p.riding = null;
+  for (const m of movers) {
+    if (p.vy >= 0 && prevBottom <= m.y + 2 && p.y + p.h >= m.y && p.x + p.w > m.x + 2 && p.x < m.x + m.w - 2) {
+      p.y = m.y - p.h; p.vy = 0; p.onGround = true; p.riding = m;
+    }
+  }
+  // Stacheln
+  {
+    const l = Math.floor((p.x + 4) / T), r = Math.floor((p.x + p.w - 4) / T), cy = Math.floor((p.y + p.h - 2) / T);
+    for (let cx = l; cx <= r; cx++) if (cy === 10 && map[10][cx] === "^" && p.y + p.h > 10 * T + 18 && p.blink <= 0) { respawn(); return; }
+  }
+  p.walk += Math.abs(p.vx) * dt * 0.05;
+  if (p.blink > 0) p.blink -= dt;
+  if (p.y > ROWS * T + 80) { respawn(); return; }
+  if (state.flash > 0) state.flash -= dt;
+
+  // Münzen
+  for (const c of coins) if (!c.taken && Math.abs(p.x + p.w / 2 - c.x) < 22 && Math.abs(p.y + p.h / 2 - c.y) < 28) {
+    c.taken = true; state.coins++; burst(c.x, c.y, C.gold, 6);
+  }
+
+  // Gegner
+  for (const e of enemies) {
+    if (!e.alive) { e.squash -= dt; continue; }
+    if (Math.abs(e.x - p.x) > W) continue;
+    e.hitX = false;
+    moveBody(e, dt);
+    const ahead = e.vx > 0 ? Math.floor((e.x + e.w + 2) / T) : Math.floor((e.x - 2) / T);
+    const erow = Math.floor((e.y + e.h - 1) / T);
+    if (e.hitX || !solid(ahead, Math.floor((e.y + e.h + 2) / T)) || (map[erow] && map[erow][ahead] === "^")) e.vx *= -1;
+    if (overlap(p, e) && p.blink <= 0) {
+      if (p.vy > 0 && p.y + p.h - e.y < 20) {
+        e.alive = false; e.squash = .4; p.vy = -520; state.coins += 2; burst(e.x + 16, e.y + 10, C.red, 14);
+      } else { respawn(); return; }
+    }
+  }
+
+  // Posten
+  state.nearPost = null;
+  for (const po of posts) {
+    const zone = { x: po.x - 10, y: po.y, w: po.w + 20, h: po.h };
+    if (overlap(p, zone)) {
+      if (!po.solved) state.nearPost = po;
+      if (!po.solved && state.postCooldown !== po) { openPost(po); return; }
+    } else if (state.postCooldown === po) state.postCooldown = null;
+  }
+
+  // Ziel
+  if (p.x + p.w > flag.x && p.x < flag.x + 12) finish();
+
+  updateGates(dt);
+
+  // Partikel
+  for (const pa of state.particles) { pa.vy += 900 * dt; pa.x += pa.vx * dt; pa.y += pa.vy * dt; pa.life -= dt; }
+  state.particles = state.particles.filter(pa => pa.life > 0);
+
+  // Kamera
+  const tx = Math.max(0, Math.min(COLS * T - W, p.x - W * 0.4));
+  cam += (tx - cam) * Math.min(1, dt * 8);
+}
+
+function updateGates(dt) {
+  for (const g of gates) if (g.open && g.anim < 1) {
+    g.anim = Math.min(1, g.anim + dt * 1.2);
+    if (g.anim >= 1) for (let y = 0; y <= 10; y++) map[y][g.col] = " ";
+  }
+}
+
+/* =========================================================
+   POSTEN-DIALOG
+   ========================================================= */
+const $ = id => document.getElementById(id);
+
+function openPost(po) {
+  state.mode = "post"; state.activePost = po; keys = {};
+  const def = POSTS[po.idx];
+  $("postTag").textContent = `POSTEN ${po.idx + 1} / ${POSTS.length}`;
+  $("postTitle").textContent = def.sheet;
+  $("postTag").textContent = `LEVEL ${state.level} · POSTEN ${po.idx + 1} / ${POSTS.length}`;
+  $("postIntro").innerHTML = `Öffne in der Datei <b>${LEVELS[state.level - 1].file}</b> das Tabellenblatt <b>«${def.sheet}»</b> und löse die Aufgaben. Gib hier die Ergebnisse ein.`;
+  $("postMsg").textContent = ""; $("postMsg").className = "msg";
+  $("postForm").innerHTML = def.qs.map((q, k) =>
+    `<label for="a${k}">${q.q}</label><input type="text" id="a${k}" inputmode="decimal">`).join("");
+  $("postScreen").classList.add("show");
+  setTimeout(() => $("a0").focus(), 50);
+}
+
+function closePost() {
+  $("postScreen").classList.remove("show");
+  state.postCooldown = state.activePost;
+  state.activePost = null;
+  state.mode = "play";
+  cvs.focus();
+}
+
+function checkPost() {
+  const po = state.activePost; if (!po) return;
+  const def = POSTS[po.idx];
+  let right = 0;
+  def.qs.forEach((q, k) => {
+    const inp = $("a" + k);
+    const n = parseAnswer(inp.value, q.pct);
+    const ok = !isNaN(n) && Math.abs(n - q.a) <= q.tol + 1e-9;
+    inp.classList.toggle("ok", ok); inp.classList.toggle("bad", !ok);
+    if (ok) right++;
+  });
+  const msg = $("postMsg");
+  if (right === def.qs.length) {
+    msg.textContent = "Alles richtig! Das Tor öffnet sich.";
+    msg.className = "msg ok";
+    po.solved = true; state.solved++; state.coins += 10;
+    gates[po.idx].open = true;
+    player.cp = { x: po.x + 10, y: 11 * T - player.h };
+    burst(po.x + 30, po.y, C.green, 30);
+    setTimeout(closePost, 900);
+  } else {
+    msg.textContent = `${right} von ${def.qs.length} richtig. Prüfe die rot markierten Felder nochmals.`;
+    msg.className = "msg bad";
+  }
+}
+
+$("checkBtn").onclick = e => { e.preventDefault(); checkPost(); };
+$("closeBtn").onclick = e => { e.preventDefault(); closePost(); };
+$("postForm").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); checkPost(); } });
+
+function startGame() {
+  const nick = $("nick").value.trim() || "Gast";
+  state.nick = nick.slice(0, 16);
+  $("startScreen").classList.remove("show");
+  state.mode = "play";
+}
+$("startBtn").onclick = startGame;
+$("nick").addEventListener("keydown", e => { if (e.key === "Enter") startGame(); });
+
+function finish() {
+  if (state.level < LEVELS.length) {
+    state.mode = "level";
+    $("levelText").innerHTML = `Super, <b>${escapeHtml(state.nick)}</b>! Du hast Level ${state.level} geschafft.`;
+    $("levelFile").textContent = LEVELS[state.level].file;
+    $("levelScreen").classList.add("show");
+    return;
+  }
+  state.mode = "end";
+  const m = Math.floor(state.time / 60), s = Math.floor(state.time % 60);
+  $("endText").innerHTML = `Super, <b>${escapeHtml(state.nick)}</b>! Du hast beide Level mit allen Posten gelöst.<br>Zeit: <b>${m}:${String(s).padStart(2, "0")}</b> · Münzen: <b>${state.coins}</b> · Neustarts: <b>${state.deaths}</b>`;
+  $("endWord").innerHTML = solutionWord().split("").map(c => `<span>${escapeHtml(c)}</span>`).join("");
+  $("endScreen").classList.add("show");
+}
+
+/* Lösungswort verschlüsselt (XOR + Base64, gleicher Schlüssel wie Lösungen) */
+function solutionWord() {
+  const k = "kvBL-ExcelJump", b = atob("Iz0AKQ==");
+  let t = ""; for (let i = 0; i < b.length; i++) t += String.fromCharCode(b.charCodeAt(i) ^ k.charCodeAt(i % k.length));
+  return t;
+}
+$("againBtn").onclick = () => { $("endScreen").classList.remove("show"); const n = state.nick; reset(); state.nick = n; state.mode = "play"; };
+$("nextBtn").onclick = () => { $("levelScreen").classList.remove("show"); startLevel(state.level + 1); state.mode = "play"; };
+
+function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+/* =========================================================
+   ZEICHNEN
+   ========================================================= */
+function rr(x, y, w, h, r, fill) { ctx.fillStyle = fill; ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); }
+
+function drawBackground() {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  if (state.level === 2) { g.addColorStop(0, "#3b3f8f"); g.addColorStop(0.6, "#c86b8a"); g.addColorStop(1, "#ffc98a"); }
+  else { g.addColorStop(0, "#6cc4ff"); g.addColorStop(1, "#d4f0ff"); }
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // Hügel (Parallax)
+  ctx.fillStyle = "#9bd6a5";
+  for (let i = -1; i < 8; i++) {
+    const x = i * 320 - (cam * 0.25) % 320;
+    ctx.beginPath(); ctx.ellipse(x + 160, 450, 220, 150, 0, Math.PI, 0); ctx.fill();
+  }
+  ctx.fillStyle = "#7cc68a";
+  for (let i = -1; i < 8; i++) {
+    const x = i * 260 - (cam * 0.4) % 260;
+    ctx.beginPath(); ctx.ellipse(x + 80, 460, 140, 90, 0, Math.PI, 0); ctx.fill();
+  }
+  // Wolken
+  ctx.fillStyle = "rgba(255,255,255,.9)";
+  for (let i = -1; i < 7; i++) {
+    const x = i * 300 - (cam * 0.15) % 300, y = 60 + (i % 3) * 35;
+    ctx.beginPath(); ctx.arc(x + 40, y, 22, 0, 7); ctx.arc(x + 65, y - 10, 28, 0, 7); ctx.arc(x + 95, y, 22, 0, 7); ctx.fill();
+  }
+}
+
+function drawTiles() {
+  const c0 = Math.floor(cam / T), c1 = c0 + Math.ceil(W / T) + 1;
+  for (let y = 0; y < ROWS; y++) for (let x = c0; x <= c1 && x < COLS; x++) {
+    const ch = map[y][x]; if (ch === " ") continue;
+    const px = x * T - cam, py = y * T;
+    if (ch === "#") {
+      const topRow = y === 0 || map[y - 1][x] !== "#";
+      ctx.fillStyle = "#b5733c"; ctx.fillRect(px, py, T, T);
+      ctx.fillStyle = "#9c5f2e"; ctx.fillRect(px + 6, py + 14, 8, 6); ctx.fillRect(px + 24, py + 28, 8, 6);
+      if (topRow) { ctx.fillStyle = "#4cb85c"; ctx.fillRect(px, py, T, 10); ctx.fillStyle = "#3a9a49"; ctx.fillRect(px, py + 8, T, 3); }
+    } else if (ch === "=") {
+      rr(px + 1, py + 1, T - 2, T - 2, 5, C.light);
+      ctx.fillStyle = "rgba(255,255,255,.35)"; ctx.fillRect(px + 4, py + 4, T - 8, 5);
+    } else if (ch === "^") {
+      ctx.fillStyle = "#8a97a8";
+      for (let k = 0; k < 4; k++) {
+        ctx.beginPath(); ctx.moveTo(px + k * 10, py + T); ctx.lineTo(px + k * 10 + 5, py + 16); ctx.lineTo(px + k * 10 + 10, py + T); ctx.fill();
+      }
+      ctx.fillStyle = "#c9d2dd";
+      for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.moveTo(px + k * 10 + 5, py + 16); ctx.lineTo(px + k * 10 + 7, py + T); ctx.lineTo(px + k * 10 + 5, py + T); ctx.fill(); }
+    } else if (ch === "B") {
+      // Excel-Zelle als Block
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(px, py, T, T);
+      ctx.strokeStyle = "#1d6f42"; ctx.lineWidth = 3; ctx.strokeRect(px + 1.5, py + 1.5, T - 3, T - 3);
+      ctx.fillStyle = "#1d6f42"; ctx.fillRect(px + T - 9, py + T - 9, 6, 6);
+      ctx.strokeStyle = "#d0e8da"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(px + 4, py + T / 2); ctx.lineTo(px + T - 4, py + T / 2); ctx.stroke();
+    }
+  }
+  // Tore
+  for (const g of gates) {
+    if (g.anim >= 1) continue;
+    const px = g.col * T - cam; if (px < -T || px > W) continue;
+    const h = 11 * T * (1 - g.anim);
+    ctx.fillStyle = "#3b4a5c"; ctx.fillRect(px + 4, 11 * T - h, T - 8, h);
+    ctx.fillStyle = "#5c6f85";
+    for (let y = 11 * T - h; y < 11 * T; y += 30) ctx.fillRect(px + 8, y + 4, T - 16, 20);
+    ctx.fillStyle = C.gold;
+    ctx.beginPath(); ctx.arc(px + T / 2, 11 * T - Math.min(h, 60) + 20, 9, 0, 7); ctx.fill();
+    ctx.fillStyle = "#3b4a5c"; ctx.fillRect(px + T / 2 - 2, 11 * T - Math.min(h, 60) + 18, 4, 8);
+  }
+}
+
+function drawMovers() {
+  for (const m of movers) {
+    const px = m.x - cam; if (px < -150 || px > W + 50) continue;
+    rr(px, m.y, m.w, m.h, 6, C.gold);
+    ctx.fillStyle = "rgba(255,255,255,.45)"; ctx.fillRect(px + 6, m.y + 3, m.w - 12, 4);
+    ctx.fillStyle = "#b37b00"; for (let k = 1; k < 3; k++) ctx.fillRect(px + k * T - 1, m.y + 2, 2, m.h - 4);
+  }
+}
+
+function drawPosts() {
+  for (const po of posts) {
+    const px = po.x - cam; if (px < -100 || px > W + 100) continue;
+    ctx.fillStyle = "#7a5230"; ctx.fillRect(px + 26, po.y + 40, 8, 50);
+    rr(px - 20, po.y - 6, 100, 54, 8, po.solved ? C.green : C.blue);
+    ctx.strokeStyle = C.gold; ctx.lineWidth = 3; ctx.beginPath(); ctx.roundRect(px - 20, po.y - 6, 100, 54, 8); ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.textAlign = "center";
+    ctx.font = "bold 11px Lato, Trebuchet MS, sans-serif";
+    ctx.fillText(`POSTEN ${po.idx + 1}`, px + 30, po.y + 12);
+    const name = POSTS[po.idx].sheet;
+    ctx.font = `bold ${name.length > 10 ? 11 : 14}px Lato, Trebuchet MS, sans-serif`;
+    ctx.fillText(po.solved ? "✓ gelöst" : (state.level === 2 ? "Teil 2" : name), px + 30, po.y + 34);
+    if (state.nearPost === po && state.mode === "play") {
+      const bob = Math.sin(performance.now() / 200) * 3;
+      rr(px - 6, po.y - 40 + bob, 72, 24, 6, "#fff");
+      ctx.fillStyle = C.blue; ctx.font = "bold 12px Lato, sans-serif"; ctx.fillText("Taste E", px + 30, po.y - 23 + bob);
+    }
+  }
+  ctx.textAlign = "left";
+}
+
+function drawCoins() {
+  const t = performance.now() / 300;
+  for (const c of coins) {
+    if (c.taken) continue;
+    const px = c.x - cam; if (px < -20 || px > W + 20) continue;
+    const sx = Math.abs(Math.cos(t + c.x * 0.01));
+    ctx.fillStyle = C.gold; ctx.beginPath(); ctx.ellipse(px, c.y, 10 * sx + 2, 12, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#ffd76a"; ctx.beginPath(); ctx.ellipse(px, c.y, 5 * sx + 1, 7, 0, 0, 7); ctx.fill();
+  }
+}
+
+function drawEnemies() {
+  for (const e of enemies) {
+    const px = e.x - cam; if (px < -60 || px > W + 60) continue;
+    if (!e.alive) {
+      if (e.squash > 0) rr(px, e.y + e.h - 8, e.w, 8, 3, C.red);
+      continue;
+    }
+    const wob = Math.sin(performance.now() / 120 + e.x) * 2;
+    rr(px, e.y + wob, e.w, e.h - wob, 10, C.red);
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(px + 10, e.y + 11 + wob, 5, 0, 7); ctx.arc(px + 22, e.y + 11 + wob, 5, 0, 7); ctx.fill();
+    ctx.fillStyle = "#000";
+    const look = e.vx > 0 ? 1.5 : -1.5;
+    ctx.beginPath(); ctx.arc(px + 10 + look, e.y + 12 + wob, 2.3, 0, 7); ctx.arc(px + 22 + look, e.y + 12 + wob, 2.3, 0, 7); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.font = "bold 9px Lato, sans-serif"; ctx.textAlign = "center";
+    ctx.fillText(e.label, px + e.w / 2, e.y + 26 + wob);
+    ctx.textAlign = "left";
+  }
+}
+
+function drawFlag() {
+  const px = flag.x - cam; if (px < -100 || px > W + 100) return;
+  ctx.fillStyle = "#ddd"; ctx.fillRect(px, flag.y, 8, flag.h);
+  ctx.fillStyle = C.gold; ctx.beginPath(); ctx.arc(px + 4, flag.y, 9, 0, 7); ctx.fill();
+  const wave = Math.sin(performance.now() / 200) * 5;
+  ctx.fillStyle = C.blue;
+  ctx.beginPath(); ctx.moveTo(px + 8, flag.y + 12); ctx.lineTo(px + 78, flag.y + 30 + wave); ctx.lineTo(px + 8, flag.y + 52); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.font = "bold 13px Lato, sans-serif"; ctx.fillText("ZIEL", px + 16, flag.y + 37);
+}
+
+function drawPlayer() {
+  const p = player;
+  if (p.blink > 0 && Math.floor(p.blink * 12) % 2) return;
+  const px = Math.round(p.x - cam), py = Math.round(p.y);
+  ctx.save();
+  ctx.translate(px + p.w / 2, py);
+  ctx.scale(p.face, 1);
+  const step = p.onGround && Math.abs(p.vx) > 20 ? Math.sin(p.walk * 3) * 5 : 0;
+  // Beine
+  ctx.fillStyle = "#2b2b3a";
+  ctx.fillRect(-10, 26, 8, 12 + (step > 0 ? -2 : 0)); ctx.fillRect(2, 26, 8, 12 + (step < 0 ? -2 : 0));
+  ctx.fillStyle = "#fff"; ctx.fillRect(-11 + step * .4, 35, 10, 4); ctx.fillRect(1 - step * .4, 35, 10, 4);
+  // Hoodie
+  rr(-12, 13, 24, 16, 5, C.blue);
+  ctx.fillStyle = C.gold; ctx.fillRect(-2, 16, 4, 9);
+  // Kopf
+  rr(-10, -2, 20, 17, 7, "#f2c9a0");
+  ctx.fillStyle = "#4a2f1d"; rr(-11, -4, 22, 8, 4, "#4a2f1d"); ctx.fillRect(-11, -1, 5, 8);
+  // Auge
+  ctx.fillStyle = "#000"; ctx.fillRect(4, 5, 3, 4);
+  // Kopfhörer
+  ctx.strokeStyle = C.gold; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(0, 4, 12, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
+  rr(-14, 3, 6, 9, 2, C.gold);
+  ctx.restore();
+  // Name
+  ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.font = "bold 11px Lato, sans-serif"; ctx.textAlign = "center";
+  const w = ctx.measureText(state.nick).width + 10;
+  if (state.nick) { rr(px + p.w / 2 - w / 2, py - 22, w, 15, 4, "rgba(0,67,136,.75)"); ctx.fillStyle = "#fff"; ctx.fillText(state.nick, px + p.w / 2, py - 11); }
+  ctx.textAlign = "left";
+}
+
+function drawParticles() {
+  for (const pa of state.particles) { ctx.globalAlpha = Math.max(0, pa.life / .8); ctx.fillStyle = pa.color; ctx.fillRect(pa.x - cam - 3, pa.y - 3, 6, 6); }
+  ctx.globalAlpha = 1;
+}
+
+function drawHUD() {
+  rr(12, 12, 440, 40, 10, "rgba(0,67,136,.88)");
+  ctx.fillStyle = "#fff"; ctx.font = "bold 16px Lato, Trebuchet MS, sans-serif";
+  const m = Math.floor(state.time / 60), s = Math.floor(state.time % 60);
+  ctx.fillText(`L${state.level} · Posten ${state.solved}/${POSTS.length}`, 26, 38);
+  ctx.fillStyle = C.gold; ctx.beginPath(); ctx.arc(190, 32, 8, 0, 7); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.fillText(`× ${state.coins}`, 204, 38);
+  ctx.fillText(`⏱ ${m}:${String(s).padStart(2, "0")}`, 285, 38);
+  ctx.fillText(`✖ ${state.deaths}`, 370, 38);
+  if (state.flash > 0) {
+    ctx.globalAlpha = Math.min(1, state.flash);
+    rr(W / 2 - 210, 80, 420, 46, 10, "rgba(174,33,53,.92)");
+    ctx.fillStyle = "#fff"; ctx.font = "bold 18px Lato, Trebuchet MS, sans-serif"; ctx.textAlign = "center";
+    ctx.fillText(state.level === 2 ? "Autsch! Zurück zum Start von Level 2." : "Autsch! Zurück zum Start.", W / 2, 110);
+    ctx.textAlign = "left"; ctx.globalAlpha = 1;
+  }
+  // Fortschrittsbalken
+  rr(W - 232, 18, 220, 14, 7, "rgba(0,0,0,.25)");
+  rr(W - 232, 18, 220 * Math.min(1, player.x / flag.x), 14, 7, C.gold);
+  ctx.fillStyle = "#003060"; ctx.font = "bold 11px Lato, sans-serif"; ctx.fillText("Fortschritt", W - 232, 46);
+}
+
+function draw() {
+  drawBackground();
+  drawTiles();
+  drawMovers();
+  drawPosts();
+  drawFlag();
+  drawCoins();
+  drawEnemies();
+  drawPlayer();
+  drawParticles();
+  drawHUD();
+}
+
+/* =========================================================
+   SPIELSCHLEIFE
+   ========================================================= */
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.033, (now - last) / 1000); last = now;
+  update(dt); draw();
+  requestAnimationFrame(loop);
+}
+reset();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
