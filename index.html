@@ -714,6 +714,7 @@ function closePost() {
 
 function checkPost() {
   const po = state.activePost; if (!po) return;
+  if (po.solved) return; // schon gelöst: nicht nochmals zählen (Enter/Prüfen während der 0,9 s bis zum Schliessen)
   const def = POSTS[po.idx];
   let right = 0;
   def.qs.forEach((q, k) => {
