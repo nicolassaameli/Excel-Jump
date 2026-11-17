@@ -451,11 +451,12 @@ function moveBody(b, dt) {
 const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 
 function respawn() {
-  // Gescheitert: zurück an den Start. Gelöste Posten bleiben gelöst.
+  // Gescheitert: zurück zum letzten Posten (oder Levelstart). Gelöste Posten bleiben gelöst.
   burst(player.x + 13, Math.min(player.y, ROWS * T - 20), C.blue, 18);
-  player.x = 3 * T; player.y = 11 * T - player.h; player.vx = 0; player.vy = 0;
+  const cp = player.cp || { x: 3 * T, y: 11 * T - player.h };
+  player.x = cp.x; player.y = cp.y; player.vx = 0; player.vy = 0;
   player.blink = 1.2; player.riding = null;
-  cam = 0;
+  cam = Math.max(0, player.x - W / 2);
   state.deaths++; state.flash = 1.6;
   for (const e of enemies) { e.x = e.sx; e.y = e.sy; e.vy = 0; e.alive = true; e.squash = 0; e.vx = -Math.abs(e.vx); }
 }
