@@ -416,6 +416,11 @@ let SB = null;
 let mpStarted = false;
 const otherPlayers = new Map(); // nick → { x, y, level, seen }
 let lastSync = 0, lastSent = "";
+// Eindeutige ID pro Fenster/Tab, damit gleiche Namen (z. B. zweimal "Gast") sich nicht überschreiben.
+// Gespeichert wird "Name#xxxx" in der Spalte nick, angezeigt nur der Name.
+const TAB_ID = Math.random().toString(36).slice(2, 6);
+const myKey = () => `${state.nick}#${TAB_ID}`;
+const displayName = key => String(key).split('#')[0];
 
 // Hinweis: supabase-js-Abfragen sind "lazy" – sie werden erst mit .then()/await
 // tatsächlich gesendet. Ohne .then() passiert nichts!
@@ -424,7 +429,7 @@ function sbRun(query) {
 }
 
 function setOther(p) {
-  if (!p || p.nick === state.nick) return;
+  if (!p || p.nick === myKey()) return;
   const seen = p.updated_at ? Date.parse(p.updated_at) : Date.now();
   if (Date.now() - seen > STALE_MS) { otherPlayers.delete(p.nick); return; }
   otherPlayers.set(p.nick, { x: p.x, y: p.y, level: p.level, seen });
@@ -470,14 +475,14 @@ function syncPlayer() {
   if (sig === lastSent && now - lastSync < 5000) return;
   lastSync = now; lastSent = sig;
   sbRun(SB.from('players').upsert({
-    nick: state.nick, x, y, level: state.level, updated_at: new Date().toISOString()
+    nick: myKey(), x, y, level: state.level, updated_at: new Date().toISOString()
   }));
 }
 
 function removePlayer() {
   if (!state.nick) return;
   // keepalive, damit die Anfrage auch beim Schliessen des Tabs noch rausgeht
-  fetch(`${SB_URL}/rest/v1/players?nick=eq.${encodeURIComponent(state.nick)}`, {
+  fetch(`${SB_URL}/rest/v1/players?nick=eq.${encodeURIComponent(myKey())}`, {
     method: 'DELETE', keepalive: true,
     headers: { apikey: SB_KEY }
   }).catch(() => {});
@@ -967,7 +972,8 @@ function drawFlag() {
 }
 
 function drawGhosts() {
-  for (const [nick, p] of otherPlayers) {
+  for (const [key, p] of otherPlayers) {
+    const nick = displayName(key);
     if (p.level !== state.level) continue;
     const px = Math.round(p.x - cam);
     if (px < -40 || px > W + 40) continue;
