@@ -409,56 +409,86 @@ function solid(cx, cy) {
 /* =========================================================
    SUPABASE – Mehrspielermodus & Bestenliste
    ========================================================= */
+const SB_URL = 'https://egekdktlloactwlcpiag.supabase.co';
+const SB_KEY = 'sb_publishable_q_30UMyTA4ghhl1ejW-wiQ_LnHydfnI';
+const STALE_MS = 15000; // Spieler ohne Update seit 15 s gelten als offline
 let SB = null;
-const otherPlayers = new Map(); // nick → { x, y, level }
-let lastSync = 0;
+let mpStarted = false;
+const otherPlayers = new Map(); // nick → { x, y, level, seen }
+let lastSync = 0, lastSent = "";
+
+// Hinweis: supabase-js-Abfragen sind "lazy" – sie werden erst mit .then()/await
+// tatsächlich gesendet. Ohne .then() passiert nichts!
+function sbRun(query) {
+  return query.then(({ error }) => { if (error) console.warn('[Supabase]', error.message); });
+}
+
+function setOther(p) {
+  if (!p || p.nick === state.nick) return;
+  const seen = p.updated_at ? Date.parse(p.updated_at) : Date.now();
+  if (Date.now() - seen > STALE_MS) { otherPlayers.delete(p.nick); return; }
+  otherPlayers.set(p.nick, { x: p.x, y: p.y, level: p.level, seen });
+}
+
+function pollPlayers() {
+  if (!SB) return;
+  SB.from('players').select('*')
+    .gt('updated_at', new Date(Date.now() - STALE_MS).toISOString())
+    .then(({ data, error }) => {
+      if (error) { console.warn('[Supabase]', error.message); return; }
+      const alive = new Set();
+      (data || []).forEach(p => { setOther(p); alive.add(p.nick); });
+      for (const nick of otherPlayers.keys()) if (!alive.has(nick)) otherPlayers.delete(nick);
+    });
+}
 
 function initMultiplayer() {
-  try {
-    if (!SB && typeof supabase !== 'undefined')
-      SB = supabase.createClient('https://egekdktlloactwlcpiag.supabase.co', 'sb_publishable_q_30UMyTA4ghhl1ejW-wiQ_LnHydfnI');
-  } catch(e) {}
-  if (!SB) return;
-  // Aktuelle Spieler laden (max. 2 Minuten alt)
-  SB.from('players').select('*')
-    .gt('updated_at', new Date(Date.now() - 120000).toISOString())
-    .then(({ data }) => {
-      if (data) data.forEach(p => {
-        if (p.nick !== state.nick) otherPlayers.set(p.nick, { x: p.x, y: p.y, level: p.level });
-      });
-    });
+  if (mpStarted) return;
+  if (typeof supabase === 'undefined') { setTimeout(initMultiplayer, 500); return; } // Bibliothek lädt noch (async)
+  try { SB = supabase.createClient(SB_URL, SB_KEY); } catch (e) { console.warn('[Supabase]', e); return; }
+  mpStarted = true;
+
+  pollPlayers();
+  setInterval(pollPlayers, 3000); // Fallback, falls Realtime nicht aktiv ist; räumt auch Offline-Spieler auf
 
   // Echtzeit-Updates
   SB.channel('public:players')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, ({ eventType, new: row, old }) => {
-      if (eventType === 'DELETE') { otherPlayers.delete(old.nick); return; }
-      if (row && row.nick !== state.nick) otherPlayers.set(row.nick, { x: row.x, y: row.y, level: row.level });
+      if (eventType === 'DELETE') { if (old && old.nick) otherPlayers.delete(old.nick); return; }
+      setOther(row);
     })
     .subscribe();
 }
 
 function syncPlayer() {
-  if (!SB || !state.nick || state.mode !== 'play') return;
+  if (!SB || !state.nick || state.mode === 'start' || state.mode === 'end') return;
   const now = performance.now();
   if (now - lastSync < 200) return;
-  lastSync = now;
-  SB.from('players').upsert({
-    nick: state.nick, x: Math.round(player.x), y: Math.round(player.y),
-    level: state.level, updated_at: new Date().toISOString()
-  });
+  const x = Math.round(player.x), y = Math.round(player.y);
+  const sig = `${x},${y},${state.level}`;
+  // Bei Stillstand (z. B. Posten offen) nur alle 5 s ein Lebenszeichen senden
+  if (sig === lastSent && now - lastSync < 5000) return;
+  lastSync = now; lastSent = sig;
+  sbRun(SB.from('players').upsert({
+    nick: state.nick, x, y, level: state.level, updated_at: new Date().toISOString()
+  }));
 }
 
 function removePlayer() {
-  if (!SB || !state.nick) return;
-  SB.from('players').delete().eq('nick', state.nick);
+  if (!state.nick) return;
+  // keepalive, damit die Anfrage auch beim Schliessen des Tabs noch rausgeht
+  fetch(`${SB_URL}/rest/v1/players?nick=eq.${encodeURIComponent(state.nick)}`, {
+    method: 'DELETE', keepalive: true,
+    headers: { apikey: SB_KEY }
+  }).catch(() => {});
 }
-window.addEventListener('beforeunload', removePlayer);
+window.addEventListener('pagehide', removePlayer);
 
 function submitScore() {
-  if (!SB) return;
-  SB.from('scores').insert({
+  if (!SB) return Promise.resolve();
+  return sbRun(SB.from('scores').insert({
     nick: state.nick, time: state.time, coins: state.coins, deaths: state.deaths
-  });
+  }));
 }
 
 function showLeaderboard() {
@@ -738,8 +768,7 @@ function finish() {
   $("endWord").innerHTML = solutionWord().split("").map(c => `<span>${escapeHtml(c)}</span>`).join("");
   $("endScreen").classList.add("show");
   removePlayer();
-  submitScore();
-  showLeaderboard();
+  submitScore().then(showLeaderboard);
 }
 
 /* =========================================================
