@@ -46,7 +46,13 @@
   .keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 14px; color: #333; margin: 10px 0 4px; }
   kbd { background: #eef2f6; border: 1px solid #cfd8e3; border-bottom-width: 3px; border-radius: 5px; padding: 1px 7px; font-family: inherit; font-weight: 700; color: #004388; }
   .tag { display: inline-block; background: #F9AC00; color: #fff; font-weight: 900; border-radius: 6px; padding: 2px 10px; font-size: 13px; letter-spacing: .5px; margin-bottom: 8px; }
+  .lb { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 14px; }
+  .lb th { background: #004388; color: #fff; padding: 6px 10px; text-align: left; font-weight: 700; }
+  .lb td { padding: 5px 10px; border-bottom: 1px solid #eef2f6; }
+  .lb tr:nth-child(even) td { background: #f8fafc; }
+  .lb tr.me td { background: #fff6de; font-weight: 700; }
 </style>
+<script async src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 <div id="wrap">
@@ -126,6 +132,11 @@
       <h2>Lösungswort</h2>
       <div class="word" id="endWord"></div>
       <p><b>Gib das Lösungswort sofort deiner Lehrperson an – wer es zuerst meldet, gewinnt!</b> Verrate es niemandem.</p>
+      <h2>Bestenliste</h2>
+      <table class="lb">
+        <thead><tr><th>#</th><th>Name</th><th>Zeit</th><th>Münzen</th><th>Neustarts</th></tr></thead>
+        <tbody id="leaderboard"><tr><td colspan="5" style="text-align:center;color:#999">Wird geladen…</td></tr></tbody>
+      </table>
       <div class="row"><button class="primary" id="againBtn">Nochmals spielen</button></div>
     </div>
   </div>
@@ -214,8 +225,18 @@ function parseAnswer(raw, pct) {
   let s = String(raw).trim()
     .replace(/[−–]/g, "-")
     .replace(/CHF|Fr\.?|Tage?|Punkte|°C|%/gi, "")
-    .replace(/['’\s]/g, "")
-    .replace(",", ".");
+    .replace(/[‘’\s]/g, "");
+  // Normalize thousands/decimal separators for CH (2’367.89), DE (2.367,89) and EN (2,367.89)
+  const hasDot = s.includes("."), hasComma = s.includes(",");
+  if (hasDot && hasComma) {
+    if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
+      s = s.replace(/\./g, "").replace(",", "."); // DE: dot=thousands, comma=decimal
+    } else {
+      s = s.replace(/,/g, ""); // EN: comma=thousands, dot=decimal
+    }
+  } else if (hasComma) {
+    s = s.replace(",", "."); // only comma → decimal
+  }
   if (s === "" || isNaN(Number(s))) return NaN;
   let n = Number(s);
   if (pct && Math.abs(n) <= 1) n *= 100;
@@ -383,6 +404,75 @@ function solid(cx, cy) {
   if (cy >= ROWS || isNaN(cy)) return false;
   const ch = map[cy][cx];
   return ch === "#" || ch === "=" || ch === "B" || ch === "|";
+}
+
+/* =========================================================
+   SUPABASE – Mehrspielermodus & Bestenliste
+   ========================================================= */
+let SB = null;
+const otherPlayers = new Map(); // nick → { x, y, level }
+let lastSync = 0;
+
+function initMultiplayer() {
+  try {
+    if (!SB && typeof supabase !== 'undefined')
+      SB = supabase.createClient('https://egekdktlloactwlcpiag.supabase.co', 'sb_publishable_q_30UMyTA4ghhl1ejW-wiQ_LnHydfnI');
+  } catch(e) {}
+  if (!SB) return;
+  // Aktuelle Spieler laden (max. 2 Minuten alt)
+  SB.from('players').select('*')
+    .gt('updated_at', new Date(Date.now() - 120000).toISOString())
+    .then(({ data }) => {
+      if (data) data.forEach(p => {
+        if (p.nick !== state.nick) otherPlayers.set(p.nick, { x: p.x, y: p.y, level: p.level });
+      });
+    });
+
+  // Echtzeit-Updates
+  SB.channel('public:players')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, ({ eventType, new: row, old }) => {
+      if (eventType === 'DELETE') { otherPlayers.delete(old.nick); return; }
+      if (row && row.nick !== state.nick) otherPlayers.set(row.nick, { x: row.x, y: row.y, level: row.level });
+    })
+    .subscribe();
+}
+
+function syncPlayer() {
+  if (!SB || !state.nick || state.mode !== 'play') return;
+  const now = performance.now();
+  if (now - lastSync < 200) return;
+  lastSync = now;
+  SB.from('players').upsert({
+    nick: state.nick, x: Math.round(player.x), y: Math.round(player.y),
+    level: state.level, updated_at: new Date().toISOString()
+  });
+}
+
+function removePlayer() {
+  if (!SB || !state.nick) return;
+  SB.from('players').delete().eq('nick', state.nick);
+}
+window.addEventListener('beforeunload', removePlayer);
+
+function submitScore() {
+  if (!SB) return;
+  SB.from('scores').insert({
+    nick: state.nick, time: state.time, coins: state.coins, deaths: state.deaths
+  });
+}
+
+function showLeaderboard() {
+  if (!SB) return;
+  SB.from('scores').select('*').order('time', { ascending: true }).limit(10)
+    .then(({ data }) => {
+      if (!data) return;
+      $('leaderboard').innerHTML = data.length === 0
+        ? '<tr><td colspan="5" style="text-align:center;color:#999">Noch keine Einträge</td></tr>'
+        : data.map((s, i) => {
+            const cls = s.nick === state.nick ? ' class="me"' : '';
+            return `<tr${cls}><td>${i + 1}</td><td>${escapeHtml(s.nick)}</td><td>${fmtTime(s.time)}</td><td>${s.coins}</td><td>${s.deaths}</td></tr>`;
+          }).join('');
+    });
 }
 
 /* =========================================================
@@ -628,6 +718,7 @@ function startGame() {
   $("startScreen").classList.remove("show");
   state.startedAt = Date.now();
   state.mode = "play";
+  initMultiplayer();
 }
 $("startBtn").onclick = startGame;
 $("nick").addEventListener("keydown", e => { if (e.key === "Enter") startGame(); });
@@ -646,6 +737,9 @@ function finish() {
   $("endText").innerHTML = `Super, <b>${escapeHtml(state.nick)}</b>! Du hast beide Level mit allen Posten gelöst.<br>Zeit: <b>${fmtTime(state.time)}</b> · Münzen: <b>${state.coins}</b> · Neustarts: <b>${state.deaths}</b>`;
   $("endWord").innerHTML = solutionWord().split("").map(c => `<span>${escapeHtml(c)}</span>`).join("");
   $("endScreen").classList.add("show");
+  removePlayer();
+  submitScore();
+  showLeaderboard();
 }
 
 /* =========================================================
@@ -842,6 +936,26 @@ function drawFlag() {
   ctx.fillStyle = "#fff"; ctx.font = "bold 13px Lato, sans-serif"; ctx.fillText("ZIEL", px + 16, flag.y + 37);
 }
 
+function drawGhosts() {
+  for (const [nick, p] of otherPlayers) {
+    if (p.level !== state.level) continue;
+    const px = Math.round(p.x - cam);
+    if (px < -40 || px > W + 40) continue;
+    const py = Math.round(p.y);
+    ctx.globalAlpha = 0.45;
+    ctx.fillStyle = '#2b2b3a';
+    ctx.fillRect(px + 3, py + 26, 8, 12); ctx.fillRect(px + 15, py + 26, 8, 12);
+    rr(px + 1, py + 13, 24, 16, 5, '#8b6cff');
+    rr(px + 3, py - 2, 20, 17, 7, '#c8a87e');
+    ctx.globalAlpha = 0.65;
+    ctx.font = 'bold 11px Lato, sans-serif'; ctx.textAlign = 'center';
+    const nw = ctx.measureText(nick).width + 10;
+    rr(px + 13 - nw / 2, py - 22, nw, 15, 4, 'rgba(80,50,180,.8)');
+    ctx.fillStyle = '#fff'; ctx.fillText(nick, px + 13, py - 11);
+    ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+  }
+}
+
 function drawPlayer() {
   const p = player;
   if (p.blink > 0 && Math.floor(p.blink * 12) % 2) return;
@@ -899,6 +1013,8 @@ function drawHUD() {
   rr(W - 232, 18, 220, 14, 7, "rgba(0,0,0,.25)");
   rr(W - 232, 18, 220 * Math.min(1, player.x / flag.x), 14, 7, C.gold);
   ctx.fillStyle = "#003060"; ctx.font = "bold 11px Lato, sans-serif"; ctx.fillText("Fortschritt", W - 232, 46);
+  const online = otherPlayers.size + 1;
+  if (online > 1) { ctx.fillStyle = "rgba(0,67,136,.88)"; rr(W - 232, 56, 100, 22, 6, "rgba(0,67,136,.88)"); ctx.fillStyle = "#fff"; ctx.fillText(`online: ${online}`, W - 220, 71); }
 }
 
 function draw() {
@@ -909,6 +1025,7 @@ function draw() {
   drawFlag();
   drawCoins();
   drawEnemies();
+  drawGhosts();
   drawPlayer();
   drawParticles();
   drawHUD();
@@ -921,6 +1038,7 @@ let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
   update(dt); draw();
+  syncPlayer();
   requestAnimationFrame(loop);
 }
 reset();
