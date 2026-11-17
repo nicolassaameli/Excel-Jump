@@ -63,7 +63,7 @@
     <div class="card">
       <span class="tag">HKBe · EXCEL</span>
       <h1>Excel Jump</h1>
-      <p>Lauf durch die Welt und löse an jedem Posten die Aufgaben aus der Übungsdatei <b>HKBe_Excel_Funktionen_Uebungen.xlsx</b>. Erst wenn alle Antworten stimmen, öffnet sich das Tor zum nächsten Abschnitt.</p>
+      <p>Endlich Pause! Du willst dir im <b>Bücheli Center</b> einen Kaffee holen – aber auf dem Weg warten Excel-Probleme. Löse an jedem Posten die Aufgaben aus der Übungsdatei <b>HKBe_Excel_Funktionen_Uebungen.xlsx</b>. Erst wenn alle Antworten stimmen, öffnet sich das Tor zum nächsten Abschnitt.</p>
       <div class="dl" id="dlBox" tabindex="0">
         <h2>⬇ Zuerst: Übungsdateien herunterladen</h2>
         <p>Ohne diese Excel-Dateien kannst du die Posten nicht lösen. Lade beide herunter und öffne Level 1.</p>
@@ -114,9 +114,9 @@
   <div class="overlay" id="levelScreen">
     <div class="card">
       <span class="tag">LEVEL GESCHAFFT</span>
-      <h1>Weiter zu Level 2</h1>
+      <h1>Kaffee geholt! ☕</h1>
       <p id="levelText"></p>
-      <p>Öffne jetzt die Datei <b id="levelFile"></b>. Ab jetzt gibt es keine Hilfen mehr, und die Hindernisse werden mit jedem Posten schwieriger.</p>
+      <p>Nach der Schule geht es nochmals ins Bücheli Center. Öffne jetzt die Datei <b id="levelFile"></b>. Ab jetzt gibt es keine Hilfen mehr, und die Hindernisse werden mit jedem Posten schwieriger.</p>
       <a class="dlbtn single" href="uebungen/HKBe_Excel_Funktionen_Teil2.xlsx" download><span class="ico">📊</span><span><b>Level 2 herunterladen</b><small>HKBe_Excel_Funktionen_Teil2.xlsx</small></span></a>
       <p class="small">Wenn du in Level 2 scheiterst, beginnst du am Anfang von Level 2.</p>
       <div class="row"><button class="primary" id="nextBtn">Level 2 starten</button></div>
@@ -127,7 +127,7 @@
   <div class="overlay" id="endScreen">
     <div class="card">
       <span class="tag">GESCHAFFT</span>
-      <h1>Ziel erreicht!</h1>
+      <h1>Bücheli Center erreicht!</h1>
       <p id="endText"></p>
       <h2>Lösungswort</h2>
       <div class="word" id="endWord"></div>
@@ -272,7 +272,7 @@ window.addEventListener("resize", resize); resize();
    Pro Abschnitt wird es etwas schwieriger (schnellere Gegner).
    ========================================================= */
 function buildLevel() {
-  COLS = START_PAD + POSTS.length * SEC + 22;
+  COLS = START_PAD + POSTS.length * SEC + 30; // Platz für das ganze Bücheli Center am Ende
   map = Array.from({ length: ROWS }, () => Array(COLS).fill(" "));
   enemies = []; coins = []; posts = []; gates = []; movers = [];
 
@@ -754,6 +754,7 @@ function startGame() {
   $("startScreen").classList.remove("show");
   state.startedAt = Date.now();
   state.mode = "play";
+  say("Pause! Ich hol mir einen Kaffee im Bücheli Center.");
   initMultiplayer();
 }
 $("startBtn").onclick = startGame;
@@ -762,7 +763,7 @@ $("nick").addEventListener("keydown", e => { if (e.key === "Enter") startGame();
 function finish() {
   if (state.level < LEVELS.length) {
     state.mode = "level";
-    $("levelText").innerHTML = `Super, <b>${escapeHtml(state.nick)}</b>! Du hast Level ${state.level} geschafft.`;
+    $("levelText").innerHTML = `Super, <b>${escapeHtml(state.nick)}</b>! Du hast Level ${state.level} geschafft und dir im Bücheli Center einen Kaffee geholt.`;
     $("levelFile").textContent = LEVELS[state.level].file;
     $("levelScreen").classList.add("show");
     return;
@@ -770,7 +771,7 @@ function finish() {
   state.mode = "end";
   state.endedAt = Date.now();
   state.time = (state.endedAt - state.startedAt) / 1000;
-  $("endText").innerHTML = `Super, <b>${escapeHtml(state.nick)}</b>! Du hast beide Level mit allen Posten gelöst.<br>Zeit: <b>${fmtTime(state.time)}</b> · Münzen: <b>${state.coins}</b> · Neustarts: <b>${state.deaths}</b>`;
+  $("endText").innerHTML = `Super, <b>${escapeHtml(state.nick)}</b>! Du hast beide Level mit allen Posten gelöst und bist im Bücheli Center angekommen.<br>Zeit: <b>${fmtTime(state.time)}</b> · Münzen: <b>${state.coins}</b> · Neustarts: <b>${state.deaths}</b>`;
   $("endWord").innerHTML = solutionWord().split("").map(c => `<span>${escapeHtml(c)}</span>`).join("");
   $("endScreen").classList.add("show");
   removePlayer();
@@ -817,14 +818,14 @@ function solutionWord() {
   let t = ""; for (let i = 0; i < b.length; i++) t += String.fromCharCode(b.charCodeAt(i) ^ k.charCodeAt(i % k.length));
   return t;
 }
-$("againBtn").onclick = () => { $("endScreen").classList.remove("show"); const n = state.nick; reset(); state.nick = n; state.startedAt = Date.now(); state.mode = "play"; };
+$("againBtn").onclick = () => { $("endScreen").classList.remove("show"); const n = state.nick; reset(); state.nick = n; state.startedAt = Date.now(); state.mode = "play"; say("Pause! Ich hol mir einen Kaffee im Bücheli Center."); };
 
 function fmtTime(sec) {
   sec = Math.floor(sec);
   const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
   return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0");
 }
-$("nextBtn").onclick = () => { $("levelScreen").classList.remove("show"); startLevel(state.level + 1); state.mode = "play"; };
+$("nextBtn").onclick = () => { $("levelScreen").classList.remove("show"); startLevel(state.level + 1); state.mode = "play"; say("Feierabend! Nochmals ab ins Bücheli Center."); };
 
 function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
@@ -833,28 +834,150 @@ function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<":
    ========================================================= */
 function rr(x, y, w, h, r, fill) { ctx.fillStyle = fill; ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); }
 
+/* Hintergrund: Bildungszentrum kvBL (Level 1 = Tag, Level 2 = Abendstimmung) */
+const GROUND_Y = 11 * T; // Oberkante Boden (440)
+
 function drawBackground() {
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  if (state.level === 2) { g.addColorStop(0, "#3b3f8f"); g.addColorStop(0.6, "#c86b8a"); g.addColorStop(1, "#ffc98a"); }
-  else { g.addColorStop(0, "#6cc4ff"); g.addColorStop(1, "#d4f0ff"); }
+  const tAnim = performance.now() / 1000; // für die wehende Fahne
+  const L2 = state.level === 2;
+  // Himmel
+  const g = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+  if (L2) { g.addColorStop(0, "#27306e"); g.addColorStop(0.55, "#b8608a"); g.addColorStop(1, "#ffbf80"); }
+  else { g.addColorStop(0, "#2f7ad1"); g.addColorStop(0.7, "#6fb0ea"); g.addColorStop(1, "#a9d3f5"); }
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  // Hügel (Parallax)
-  ctx.fillStyle = "#9bd6a5";
-  for (let i = -1; i < 8; i++) {
-    const x = i * 320 - (cam * 0.25) % 320;
-    ctx.beginPath(); ctx.ellipse(x + 160, 450, 220, 150, 0, Math.PI, 0); ctx.fill();
+
+  // Mond (wie im Foto oben links, am Abend grösser)
+  ctx.fillStyle = L2 ? "rgba(255,245,220,.95)" : "rgba(255,255,255,.55)";
+  ctx.beginPath(); ctx.arc(150 - (cam * 0.02) % W, 70, L2 ? 16 : 6, 0, 7); ctx.fill();
+
+  // Schleierwolken
+  ctx.fillStyle = L2 ? "rgba(255,210,220,.35)" : "rgba(255,255,255,.55)";
+  for (let i = -1; i < 6; i++) {
+    const x = i * 380 - (cam * 0.08) % 380, y = 50 + (i % 3) * 40;
+    ctx.beginPath(); ctx.ellipse(x + 80, y, 70, 9, 0, 0, 7); ctx.ellipse(x + 120, y - 6, 40, 7, 0, 0, 7); ctx.fill();
   }
-  ctx.fillStyle = "#7cc68a";
-  for (let i = -1; i < 8; i++) {
-    const x = i * 260 - (cam * 0.4) % 260;
-    ctx.beginPath(); ctx.ellipse(x + 80, 460, 140, 90, 0, Math.PI, 0); ctx.fill();
+
+  // Ebene 1 (weit): Dächer, Bäume und Kirchturm
+  const P1 = 0.3, S1 = 1300; // gleiche Geschwindigkeit wie Schule → Kirche steht immer in der Lücke
+  for (let i = -1; i < 3; i++) {
+    const ox = i * S1 - (cam * P1) % S1;
+    // Dächer
+    ctx.fillStyle = L2 ? "#5b3d4a" : "#7a4a3a";
+    ctx.beginPath(); ctx.moveTo(ox + 960, GROUND_Y - 40); ctx.lineTo(ox + 1000, GROUND_Y - 85); ctx.lineTo(ox + 1180, GROUND_Y - 85); ctx.lineTo(ox + 1230, GROUND_Y - 40); ctx.fill();
+    // Bäume
+    ctx.fillStyle = L2 ? "#3d4a52" : "#5f8a5a";
+    for (const [tx, r] of [[40, 34], [90, 44], [980, 38], [1040, 30]]) { ctx.beginPath(); ctx.arc(ox + tx, GROUND_Y - 50, r, 0, 7); ctx.fill(); }
+    bgChurch(ox + 1040, L2);
   }
-  // Wolken
-  ctx.fillStyle = "rgba(255,255,255,.9)";
-  for (let i = -1; i < 7; i++) {
-    const x = i * 300 - (cam * 0.15) % 300, y = 60 + (i % 3) * 35;
-    ctx.beginPath(); ctx.arc(x + 40, y, 22, 0, 7); ctx.arc(x + 65, y - 10, 28, 0, 7); ctx.arc(x + 95, y, 22, 0, 7); ctx.fill();
+
+  // Ebene 2 (mittel): Schulgebäude
+  const P2 = 0.3, S2 = 1300;
+  for (let i = -1; i < 3; i++) bgSchool(i * S2 - (cam * P2) % S2 + 60, L2);
+  // Leichter Dunst, damit Plattformen und Figur vor dem Gebäude gut lesbar bleiben
+  ctx.fillStyle = L2 ? "rgba(60,50,110,.22)" : "rgba(120,170,220,.22)"; ctx.fillRect(0, 0, W, GROUND_Y);
+
+  // Ebene 3 (nah): Büsche, Skulptur, Fahne
+  const P3 = 0.55, S3 = 900;
+  for (let i = -1; i < 3; i++) {
+    const ox = i * S3 - (cam * P3) % S3;
+    bgBushes(ox + 30, L2); bgBushes(ox + 520, L2);
+    bgSculpture(ox + 300, L2);
+    bgFlag(ox + 760, L2);
   }
+}
+
+function bgChurch(x, L2) {
+  const base = GROUND_Y - 40;
+  // Turm mit roten/weissen Streifen
+  ctx.fillStyle = L2 ? "#c9a9a9" : "#efe6dc"; ctx.fillRect(x, base - 150, 34, 150);
+  ctx.fillStyle = L2 ? "#8a3a4a" : "#b8433a";
+  for (let k = 0; k < 7; k++) ctx.fillRect(x, base - 150 + k * 22, 34, 8);
+  // Uhr und Schallfenster
+  ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(x + 17, base - 60, 8, 0, 7); ctx.fill();
+  ctx.strokeStyle = "#333"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x + 17, base - 60); ctx.lineTo(x + 17, base - 66); ctx.moveTo(x + 17, base - 60); ctx.lineTo(x + 21, base - 60); ctx.stroke();
+  ctx.fillStyle = "#3a2e2e"; rr(x + 8, base - 140, 7, 16, 3, "#3a2e2e"); rr(x + 19, base - 140, 7, 16, 3, "#3a2e2e");
+  // Spitzhelm
+  ctx.fillStyle = L2 ? "#2f4a45" : "#3f6b5f";
+  ctx.beginPath(); ctx.moveTo(x - 3, base - 150); ctx.lineTo(x + 17, base - 230); ctx.lineTo(x + 37, base - 150); ctx.fill();
+  ctx.strokeStyle = "#555"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + 17, base - 230); ctx.lineTo(x + 17, base - 246); ctx.stroke();
+}
+
+function bgSchool(x, L2) {
+  const top = GROUND_Y - 300, h = 300;
+  const wall = L2 ? "#e9dbe6" : "#f4f6f8", wallShade = L2 ? "#c9b6c8" : "#dfe4ea";
+  const glass = L2 ? "#3a3550" : "#2d3a48", glassHi = L2 ? "rgba(255,190,140,.35)" : "rgba(140,190,240,.35)";
+  // Seitenflügel nach rechts (perspektivisch kleiner werdend)
+  ctx.fillStyle = wallShade;
+  ctx.beginPath(); ctx.moveTo(x + 560, top); ctx.lineTo(x + 900, top + 110); ctx.lineTo(x + 900, GROUND_Y); ctx.lineTo(x + 560, GROUND_Y); ctx.fill();
+  for (let b = 0; b < 3; b++) {
+    const y0 = top + 60 + b * 72, y1 = top + 105 + b * 72;
+    const ty0 = top + 135 + b * 52, ty1 = top + 165 + b * 52;
+    ctx.fillStyle = glass;
+    ctx.beginPath(); ctx.moveTo(x + 560, y0); ctx.lineTo(x + 900, ty0); ctx.lineTo(x + 900, ty1); ctx.lineTo(x + 560, y1); ctx.fill();
+    ctx.strokeStyle = wallShade; ctx.lineWidth = 3;
+    for (let k = 1; k < 9; k++) { const fx = x + 560 + k * 38; const f = (fx - x - 560) / 340; ctx.beginPath(); ctx.moveTo(fx, y0 + (ty0 - y0) * f); ctx.lineTo(fx, y1 + (ty1 - y1) * f); ctx.stroke(); }
+  }
+  // Hauptbau
+  ctx.fillStyle = wall; ctx.fillRect(x + 110, top, 450, h);
+  for (let b = 0; b < 3; b++) {
+    const y = top + 60 + b * 72;
+    ctx.fillStyle = glass; ctx.fillRect(x + 140, y, 420, 46);
+    ctx.fillStyle = glassHi; ctx.fillRect(x + 140, y, 420, 10);
+    ctx.fillStyle = wall; for (let k = 1; k < 6; k++) ctx.fillRect(x + 140 + k * 70, y, 4, 46);
+  }
+  // Fassadenfugen
+  ctx.strokeStyle = "rgba(0,0,0,.06)"; ctx.lineWidth = 1;
+  for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.moveTo(x + 110 + k * 90, top); ctx.lineTo(x + 110 + k * 90, top + 50); ctx.stroke(); }
+  // Treppenhaus-Turm links mit Schriftzug und Logo
+  ctx.fillStyle = wall; ctx.fillRect(x, top + 30, 110, h - 30);
+  ctx.fillStyle = "rgba(0,0,0,.05)"; ctx.fillRect(x + 104, top + 30, 6, h - 30);
+  ctx.save(); ctx.translate(x + 62, top + 210); ctx.rotate(-Math.PI / 2);
+  ctx.font = "bold 15px Lato, Arial, sans-serif"; ctx.fillStyle = "#555"; ctx.fillText("BILDUNGSZENTRUM", 0, 0);
+  ctx.fillStyle = C.gold; ctx.fillText("kvBL", ctx.measureText("BILDUNGSZENTRUM ").width, 0);
+  ctx.restore();
+  ctx.fillStyle = C.gold; ctx.beginPath(); ctx.arc(x + 56, top + 240, 13, 0, 7); ctx.fill();
+  ctx.fillStyle = "#6b4a1a"; ctx.beginPath(); ctx.ellipse(x + 57, top + 240, 7, 5, -0.5, 0, 7); ctx.fill();
+  // Vordach mit Bögen
+  const cx = x + 640, cy = GROUND_Y - 120;
+  ctx.strokeStyle = L2 ? "#d8cbd6" : "#e6ebf0"; ctx.lineWidth = 7;
+  for (let a = 0; a < 2; a++) { ctx.beginPath(); ctx.ellipse(cx + a * 150 + 75, cy, 75, 30, 0, Math.PI, 0); ctx.stroke(); }
+  ctx.fillStyle = "rgba(160,200,230,.35)"; ctx.fillRect(cx, cy - 2, 300, 8);
+  ctx.fillStyle = L2 ? "#d8cbd6" : "#e6ebf0"; ctx.fillRect(cx + 146, cy, 7, 120); ctx.fillRect(cx + 293, cy, 7, 120);
+}
+
+function bgSculpture(x, L2) {
+  // Rostige Stahlplatten-Skulptur
+  const cols = L2 ? ["#4a2a22", "#5a3226"] : ["#6b3a22", "#7d4529"];
+  ctx.fillStyle = "#cfd3d6"; ctx.fillRect(x - 10, GROUND_Y - 12, 140, 12);
+  for (let k = 0; k < 4; k++) {
+    ctx.fillStyle = cols[k % 2]; ctx.fillRect(x + k * 30, GROUND_Y - 120 + (k % 2) * 4, 27, 108 - (k % 2) * 4);
+    ctx.fillStyle = "rgba(0,0,0,.18)"; ctx.fillRect(x + k * 30 + 22, GROUND_Y - 116, 5, 104);
+  }
+}
+
+function bgBushes(x, L2) {
+  const c1 = L2 ? "#3c5244" : "#5c8a3e", c2 = L2 ? "#5b4040" : "#a0522d";
+  ctx.fillStyle = c1;
+  for (const [dx, r] of [[0, 22], [26, 30], [58, 24], [84, 18]]) { ctx.beginPath(); ctx.arc(x + dx, GROUND_Y - 6, r, Math.PI, 0); ctx.fill(); }
+  ctx.fillStyle = c2; // Herbstlaub
+  for (const [dx, dy] of [[10, -14], [40, -22], [66, -10], [30, -6]]) { ctx.beginPath(); ctx.arc(x + dx, GROUND_Y + dy, 5, 0, 7); ctx.fill(); }
+}
+
+function bgFlag(x, L2) {
+  const tAnim = performance.now() / 1000;
+  ctx.fillStyle = "#d6dbe0"; ctx.fillRect(x, GROUND_Y - 330, 5, 330);
+  ctx.fillStyle = "#c9ced3"; ctx.beginPath(); ctx.arc(x + 2.5, GROUND_Y - 332, 4, 0, 7); ctx.fill();
+  // Wehende Fahne (weiss mit rotem Baselstab, vereinfacht)
+  const fx = x - 2, fy = GROUND_Y - 320, fw = 62, fh = 76;
+  ctx.fillStyle = L2 ? "#f3e6ea" : "#fff";
+  ctx.beginPath(); ctx.moveTo(fx, fy);
+  for (let k = 0; k <= 10; k++) ctx.lineTo(fx - (k / 10) * fw, fy + Math.sin(tAnim * 4 + k * 0.7) * 5 * (k / 10));
+  for (let k = 10; k >= 0; k--) ctx.lineTo(fx - (k / 10) * fw, fy + fh + Math.sin(tAnim * 4 + k * 0.7) * 5 * (k / 10));
+  ctx.closePath(); ctx.fill();
+  const wob = Math.sin(tAnim * 4 + 3.5) * 2.5;
+  ctx.fillStyle = "#d4202c";
+  ctx.fillRect(fx - 33, fy + 22 + wob, 6, 44);
+  ctx.beginPath(); ctx.arc(fx - 30, fy + 22 + wob, 11, Math.PI, 2 * Math.PI); ctx.lineTo(fx - 19, fy + 30 + wob); ctx.lineTo(fx - 27, fy + 30 + wob); ctx.fill();
 }
 
 function drawTiles() {
@@ -961,14 +1084,64 @@ function drawEnemies() {
   }
 }
 
-function drawFlag() {
-  const px = flag.x - cam; if (px < -100 || px > W + 100) return;
-  ctx.fillStyle = "#ddd"; ctx.fillRect(px, flag.y, 8, flag.h);
-  ctx.fillStyle = C.gold; ctx.beginPath(); ctx.arc(px + 4, flag.y, 9, 0, 7); ctx.fill();
-  const wave = Math.sin(performance.now() / 200) * 5;
-  ctx.fillStyle = C.blue;
-  ctx.beginPath(); ctx.moveTo(px + 8, flag.y + 12); ctx.lineTo(px + 78, flag.y + 30 + wave); ctx.lineTo(px + 8, flag.y + 52); ctx.fill();
-  ctx.fillStyle = "#fff"; ctx.font = "bold 13px Lato, sans-serif"; ctx.fillText("ZIEL", px + 16, flag.y + 37);
+/* Ziel: Bücheli Center. Der Eingang liegt bei flag.x (dort wird finish() ausgelöst). */
+function drawGoal() {
+  const ex = flag.x - cam;                  // Eingang
+  const x0 = ex - 200, w = 640, gy = 11 * T, top = gy - 330;
+  if (x0 > W + 50 || x0 + w < -50) return;
+  const L2 = state.level === 2;
+  // Obere Glasbox (rechts)
+  ctx.fillStyle = L2 ? "#4b5a7a" : "#9ec3dd"; ctx.fillRect(x0 + 300, top, 340, 200);
+  ctx.fillStyle = L2 ? "rgba(255,180,140,.25)" : "rgba(255,255,255,.35)";
+  ctx.beginPath(); ctx.moveTo(x0 + 330, top); ctx.lineTo(x0 + 400, top); ctx.lineTo(x0 + 330, top + 120); ctx.fill();
+  ctx.strokeStyle = L2 ? "#38445e" : "#7fa6c2"; ctx.lineWidth = 2;
+  for (let k = 1; k < 6; k++) { ctx.beginPath(); ctx.moveTo(x0 + 300 + k * 57, top); ctx.lineTo(x0 + 300 + k * 57, top + 200); ctx.stroke(); }
+  // Lamellenfassade (links und als Band)
+  ctx.fillStyle = L2 ? "#7e7f8c" : "#b9bcc1"; ctx.fillRect(x0, top + 40, 300, 160); ctx.fillRect(x0 + 300, top + 150, 340, 50);
+  ctx.fillStyle = L2 ? "#666775" : "#9a9ea4";
+  for (let k = 0; k < 300; k += 9) ctx.fillRect(x0 + k, top + 40, 3, 160);
+  for (let k = 300; k < 640; k += 9) ctx.fillRect(x0 + k, top + 150, 3, 50);
+  // Ladenschild mit Geschäften (ohne Markennamen)
+  rr(x0 + 20, top + 55, 250, 120, 4, "#f4f4f4");
+  const shops = [["#3d4a7a", "MODE"], ["#1a8a4a", "SCHUHE"], ["#e8590c", "LEBENSMITTEL"], ["#5a3d7a", "COIFFEUR"], ["#0b8f6a", "APOTHEKE"], ["#c2185b", "DROGERIE"]];
+  shops.forEach(([c, t], k) => {
+    const sx = x0 + 28 + (k % 3) * 81, sy = top + 63 + Math.floor(k / 3) * 55;
+    rr(sx, sy, 75, 48, 3, c);
+    ctx.fillStyle = "#fff"; ctx.font = `bold ${t.length > 8 ? 9 : 11}px Lato, sans-serif`; ctx.textAlign = "center";
+    ctx.fillText(t, sx + 37, sy + 28);
+  });
+  ctx.textAlign = "left";
+  // Schaufensterfront unten
+  ctx.fillStyle = L2 ? "#3f4b63" : "#6f93ad"; ctx.fillRect(x0, top + 200, w, 130);
+  ctx.fillStyle = L2 ? "rgba(255,200,150,.18)" : "rgba(255,255,255,.22)";
+  for (let k = 0; k < w; k += 110) { ctx.beginPath(); ctx.moveTo(x0 + k + 20, top + 200); ctx.lineTo(x0 + k + 60, top + 200); ctx.lineTo(x0 + k + 10, gy); ctx.lineTo(x0 + k - 30, gy); ctx.fill(); }
+  ctx.fillStyle = "#2a2f36"; for (let k = 0; k <= w; k += 80) ctx.fillRect(x0 + k, top + 200, 4, 130);
+  ctx.fillRect(x0, top + 198, w, 5);
+  // Eingang mit Schild
+  rr(ex - 30, top + 210, 120, 26, 3, "#2a2f36");
+  ctx.fillStyle = "#fff"; ctx.font = "bold 13px Lato, sans-serif"; ctx.textAlign = "center";
+  ctx.fillText("BÜCHELI CENTER", ex + 30, top + 228); ctx.textAlign = "left";
+  ctx.fillStyle = L2 ? "#ffd59a" : "#e9f2f8"; ctx.fillRect(ex - 14, top + 244, 88, 86);   // Licht im Eingang
+  ctx.fillStyle = "#2a2f36"; ctx.fillRect(ex + 28, top + 244, 4, 86);
+  // Pfeil, der zum Eingang zeigt
+  const bob = Math.sin(performance.now() / 250) * 5;
+  ctx.fillStyle = C.gold;
+  ctx.beginPath(); ctx.moveTo(ex + 18, top + 160 + bob); ctx.lineTo(ex + 42, top + 160 + bob); ctx.lineTo(ex + 42, top + 178 + bob);
+  ctx.lineTo(ex + 52, top + 178 + bob); ctx.lineTo(ex + 30, top + 198 + bob); ctx.lineTo(ex + 8, top + 178 + bob); ctx.lineTo(ex + 18, top + 178 + bob); ctx.fill();
+  // Café: oranger Sonnenschirm mit Tisch
+  const cx = ex + 220;
+  ctx.fillStyle = "#ddd"; ctx.fillRect(cx - 2, gy - 95, 4, 95);
+  ctx.fillStyle = "#f28c18"; ctx.beginPath(); ctx.moveTo(cx - 70, gy - 80); ctx.quadraticCurveTo(cx, gy - 125, cx + 70, gy - 80); ctx.fill();
+  ctx.fillStyle = "#d9730d"; ctx.fillRect(cx - 70, gy - 82, 140, 6);
+  ctx.fillStyle = "#cfd3d6"; ctx.fillRect(cx - 22, gy - 34, 44, 4); ctx.fillRect(cx - 2, gy - 30, 4, 30);
+  ctx.strokeStyle = "#cfd3d6"; ctx.lineWidth = 3;
+  for (const d of [-40, 40]) { ctx.beginPath(); ctx.moveTo(cx + d, gy); ctx.lineTo(cx + d, gy - 26); ctx.lineTo(cx + d + Math.sign(d) * 10, gy - 40); ctx.stroke(); }
+  ctx.fillStyle = "#fff"; ctx.fillRect(cx - 12, gy - 42, 7, 8); ctx.fillRect(cx + 6, gy - 42, 7, 8); // Kaffeetassen
+  // Baum
+  const tx = ex + 360;
+  ctx.fillStyle = "#7a5a3a"; ctx.fillRect(tx - 4, gy - 120, 8, 120);
+  ctx.fillStyle = L2 ? "#4f6b3e" : "#8cc63f";
+  for (const [dx, dy, r] of [[0, -150, 40], [-30, -125, 30], [30, -125, 32], [0, -110, 28]]) { ctx.beginPath(); ctx.arc(tx + dx, gy + dy, r, 0, 7); ctx.fill(); }
 }
 
 function drawGhosts() {
@@ -990,6 +1163,23 @@ function drawGhosts() {
     ctx.fillStyle = '#fff'; ctx.fillText(nick, px + 13, py - 11);
     ctx.textAlign = 'left'; ctx.globalAlpha = 1;
   }
+}
+
+function say(text, sec = 3.5) { state.bubble = { text, t: sec }; }
+
+function drawBubble() {
+  const b = state.bubble; if (!b || b.t <= 0) return;
+  if (state.mode === "play") b.t -= 1 / 60;
+  const px = Math.round(player.x - cam) + 13, py = Math.round(player.y) - 18;
+  ctx.font = "bold 14px Lato, sans-serif";
+  const tw = ctx.measureText(b.text).width, bw = tw + 24, bh = 32;
+  const bx = Math.max(8, Math.min(W - bw - 8, px - 20)), by = py - bh - 12;
+  ctx.globalAlpha = Math.min(1, b.t * 2);
+  rr(bx, by, bw, bh, 10, "#fff");
+  ctx.beginPath(); ctx.moveTo(px - 6, by + bh - 1); ctx.lineTo(px + 6, by + bh - 1); ctx.lineTo(px, by + bh + 10); ctx.fill();
+  ctx.strokeStyle = C.blue; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 10); ctx.stroke();
+  ctx.fillStyle = "#003060"; ctx.fillText(b.text, bx + 12, by + 21);
+  ctx.globalAlpha = 1;
 }
 
 function drawPlayer() {
@@ -1055,14 +1245,15 @@ function drawHUD() {
 
 function draw() {
   drawBackground();
+  drawGoal();
   drawTiles();
   drawMovers();
   drawPosts();
-  drawFlag();
   drawCoins();
   drawEnemies();
   drawGhosts();
   drawPlayer();
+  drawBubble();
   drawParticles();
   drawHUD();
 }
