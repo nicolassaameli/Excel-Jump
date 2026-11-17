@@ -969,17 +969,56 @@ function bgFlag(x, L2) {
   const tAnim = performance.now() / 1000;
   ctx.fillStyle = "#d6dbe0"; ctx.fillRect(x, GROUND_Y - 330, 5, 330);
   ctx.fillStyle = "#c9ced3"; ctx.beginPath(); ctx.arc(x + 2.5, GROUND_Y - 332, 4, 0, 7); ctx.fill();
-  // Wehende Fahne (weiss mit rotem Baselstab, vereinfacht)
-  const fx = x - 2, fy = GROUND_Y - 320, fw = 62, fh = 76;
+  // Wehende Fahne: weiss mit rotem Baselstab
+  const fx = x - 2, fy = GROUND_Y - 322, fw = 72, fh = 86;
+  const wave = k => Math.sin(tAnim * 4 + k * 0.7) * 5 * (k / 10);
   ctx.fillStyle = L2 ? "#f3e6ea" : "#fff";
   ctx.beginPath(); ctx.moveTo(fx, fy);
-  for (let k = 0; k <= 10; k++) ctx.lineTo(fx - (k / 10) * fw, fy + Math.sin(tAnim * 4 + k * 0.7) * 5 * (k / 10));
-  for (let k = 10; k >= 0; k--) ctx.lineTo(fx - (k / 10) * fw, fy + fh + Math.sin(tAnim * 4 + k * 0.7) * 5 * (k / 10));
+  for (let k = 0; k <= 10; k++) ctx.lineTo(fx - (k / 10) * fw, fy + wave(k));
+  for (let k = 10; k >= 0; k--) ctx.lineTo(fx - (k / 10) * fw, fy + fh + wave(k));
   ctx.closePath(); ctx.fill();
-  const wob = Math.sin(tAnim * 4 + 3.5) * 2.5;
-  ctx.fillStyle = "#d4202c";
-  ctx.fillRect(fx - 33, fy + 22 + wob, 6, 44);
-  ctx.beginPath(); ctx.arc(fx - 30, fy + 22 + wob, 11, Math.PI, 2 * Math.PI); ctx.lineTo(fx - 19, fy + 30 + wob); ctx.lineTo(fx - 27, fy + 30 + wob); ctx.fill();
+  // Wappen in der Mitte der Fahne (wippt mit der Welle mit)
+  const sc = 0.105;
+  ctx.save();
+  ctx.translate(fx - fw / 2, fy + fh / 2 + wave(5));
+  ctx.scale(sc, sc);
+  ctx.translate(-290, -330);              // Mitte des Baselstabs (Zeichnung in 640er-Koordinaten)
+  baselstab(L2);
+  ctx.restore();
+}
+
+/* Baselstab (Wappen Basel-Landschaft), gezeichnet in einem Raster von ca. 640 × 640 */
+function baselstab(L2) {
+  const red = L2 ? "#c41a26" : "#e30613", ink = "#111";
+  ctx.lineJoin = "round"; ctx.lineCap = "round";
+  // Krümme als dicke Linie: zuerst schwarzer Rand, dann rot
+  const crook = () => {
+    ctx.beginPath(); ctx.moveTo(232, 230);
+    ctx.bezierCurveTo(225, 120, 280, 70, 350, 72);
+    ctx.bezierCurveTo(430, 75, 450, 150, 420, 190);
+    ctx.bezierCurveTo(395, 220, 350, 205, 335, 182);
+  };
+  crook(); ctx.strokeStyle = ink; ctx.lineWidth = 84; ctx.stroke();
+  // Knöpfe am äusseren Rand
+  const knobs = [[172, 145], [208, 78], [282, 34], [365, 32], [432, 72], [466, 148], [425, 228]];
+  for (const [kx, ky] of knobs) { ctx.beginPath(); ctx.arc(kx, ky, 26, 0, 7); ctx.fillStyle = ink; ctx.fill(); }
+  for (const [kx, ky] of knobs) { ctx.beginPath(); ctx.arc(kx, ky, 19, 0, 7); ctx.fillStyle = red; ctx.fill(); }
+  crook(); ctx.strokeStyle = red; ctx.lineWidth = 70; ctx.stroke();
+  // Innere Linie der Krümme
+  ctx.beginPath(); ctx.moveTo(228, 215); ctx.bezierCurveTo(222, 140, 280, 100, 345, 105);
+  ctx.bezierCurveTo(400, 110, 420, 160, 395, 180);
+  ctx.strokeStyle = ink; ctx.lineWidth = 7; ctx.stroke();
+  // Zwei Bänder (Schwänze) mit Spitzen
+  ctx.beginPath();
+  ctx.moveTo(160, 290); ctx.lineTo(118, 600); ctx.lineTo(190, 482); ctx.lineTo(225, 628);
+  ctx.lineTo(262, 480); ctx.lineTo(330, 600); ctx.lineTo(300, 290); ctx.closePath();
+  ctx.fillStyle = red; ctx.fill(); ctx.strokeStyle = ink; ctx.lineWidth = 9; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(225, 292); ctx.lineTo(225, 625); ctx.lineWidth = 7; ctx.stroke();
+  // Knauf (Querband)
+  ctx.lineWidth = 9;
+  ctx.fillStyle = red; ctx.fillRect(138, 212, 175, 82); ctx.strokeRect(138, 212, 175, 82);
+  ctx.fillRect(118, 232, 214, 42); ctx.strokeRect(118, 232, 214, 42);
+  ctx.lineCap = "butt"; ctx.lineJoin = "miter";
 }
 
 function drawTiles() {
