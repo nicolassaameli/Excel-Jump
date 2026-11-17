@@ -23,8 +23,8 @@
   input.ok { border-color: #11A759; background: #eafaf1; }
   input.bad { border-color: #AE2135; background: #fdecee; }
   .row { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
-  .word { display: flex; gap: 8px; justify-content: center; margin: 6px 0 12px; }
-  .word span { width: 52px; height: 60px; display: flex; align-items: center; justify-content: center; background: #004388; color: #F9AC00; font-size: 34px; font-weight: 900; border-radius: 8px; box-shadow: 0 4px 0 #F9AC00; }
+  .word { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 6px 0 12px; }
+  .word span { width: 42px; height: 54px; display: flex; align-items: center; justify-content: center; background: #004388; color: #F9AC00; font-size: 28px; font-weight: 900; border-radius: 8px; box-shadow: 0 4px 0 #F9AC00; }
   .dl { background: #FFF6DE; border: 3px solid #F9AC00; border-radius: 12px; padding: 14px 16px; margin: 6px 0 14px; }
   .dl h2 { margin: 0 0 4px; font-size: 20px; }
   .dl p { margin: 0 0 10px; font-size: 15px; }
@@ -418,9 +418,11 @@ const otherPlayers = new Map(); // nick → { x, y, level, seen }
 let lastSync = 0, lastSent = "";
 // Eindeutige ID pro Fenster/Tab, damit gleiche Namen (z. B. zweimal "Gast") sich nicht überschreiben.
 // Gespeichert wird "Name#xxxx" in der Spalte nick, angezeigt nur der Name.
-const TAB_ID = Math.random().toString(36).slice(2, 6);
+const GENDER = Math.random() < 0.5 ? 'f' : 'm';   // Spielfigur: weiblich oder männlich (zufällig)
+const TAB_ID = GENDER + Math.random().toString(36).slice(2, 6);
 const myKey = () => `${state.nick}#${TAB_ID}`;
 const displayName = key => String(key).split('#')[0];
+const genderOf = key => (String(key).split('#')[1] || '')[0] === 'f' ? 'f' : 'm';
 
 // Hinweis: supabase-js-Abfragen sind "lazy" – sie werden erst mit .then()/await
 // tatsächlich gesendet. Ohne .then() passiert nichts!
@@ -754,7 +756,7 @@ function startGame() {
   $("startScreen").classList.remove("show");
   state.startedAt = Date.now();
   state.mode = "play";
-  say("Pause! Ich hol mir einen Kaffee im Bücheli Center.");
+  say(INTRO_BUBBLES[1]);
   initMultiplayer();
 }
 $("startBtn").onclick = startGame;
@@ -814,18 +816,18 @@ $("tCancel").onclick = () => $("teacherScreen").classList.remove("show");
 
 /* Lösungswort verschlüsselt (XOR + Base64, gleicher Schlüssel wie Lösungen) */
 function solutionWord() {
-  const k = "kvBL-ExcelJump", b = atob("Iz0AKQ==");
+  const k = "kvBL-ExcelJump", b = atob("OAYnOFkkGwwJAw==");
   let t = ""; for (let i = 0; i < b.length; i++) t += String.fromCharCode(b.charCodeAt(i) ^ k.charCodeAt(i % k.length));
   return t;
 }
-$("againBtn").onclick = () => { $("endScreen").classList.remove("show"); const n = state.nick; reset(); state.nick = n; state.startedAt = Date.now(); state.mode = "play"; say("Pause! Ich hol mir einen Kaffee im Bücheli Center."); };
+$("againBtn").onclick = () => { $("endScreen").classList.remove("show"); const n = state.nick; reset(); state.nick = n; state.startedAt = Date.now(); state.mode = "play"; say(INTRO_BUBBLES[1]); };
 
 function fmtTime(sec) {
   sec = Math.floor(sec);
   const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
   return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0");
 }
-$("nextBtn").onclick = () => { $("levelScreen").classList.remove("show"); startLevel(state.level + 1); state.mode = "play"; say("Feierabend! Nochmals ab ins Bücheli Center."); };
+$("nextBtn").onclick = () => { $("levelScreen").classList.remove("show"); startLevel(state.level + 1); state.mode = "play"; say(INTRO_BUBBLES[2]); };
 
 function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
@@ -1155,7 +1157,9 @@ function drawGhosts() {
     ctx.fillStyle = '#2b2b3a';
     ctx.fillRect(px + 3, py + 26, 8, 12); ctx.fillRect(px + 15, py + 26, 8, 12);
     rr(px + 1, py + 13, 24, 16, 5, '#8b6cff');
+    if (genderOf(key) === 'f') { ctx.fillStyle = '#7a3b1e'; ctx.beginPath(); ctx.ellipse(px - 1, py + 6, 5, 10, 0.35, 0, 7); ctx.fill(); }
     rr(px + 3, py - 2, 20, 17, 7, '#c8a87e');
+    if (genderOf(key) === 'f') { ctx.fillStyle = '#7a3b1e'; ctx.fillRect(px + 2, py - 4, 22, 6); ctx.fillRect(px + 2, py, 6, 12); }
     ctx.globalAlpha = 0.65;
     ctx.font = 'bold 11px Lato, sans-serif'; ctx.textAlign = 'center';
     const nw = ctx.measureText(nick).width + 10;
@@ -1165,11 +1169,25 @@ function drawGhosts() {
   }
 }
 
-function say(text, sec = 3.5) { state.bubble = { text, t: sec }; }
+// Sprechblasen am Levelanfang: werden nacheinander angezeigt
+const INTRO_BUBBLES = {
+  1: ["Endlich Pause!", "Lass Schoggigipfeli und Redbull holen!"],
+  2: ["Feierabend!", "Will Proteindrink!"],
+};
+// say("Text") oder say(["Blase 1", "Blase 2"]) – jede Blase bleibt `sec` Sekunden stehen
+function say(texts, sec = 2.2) {
+  const q = (Array.isArray(texts) ? texts : [texts]).slice();
+  state.bubble = { text: q.shift(), t: sec, sec, queue: q };
+}
 
 function drawBubble() {
-  const b = state.bubble; if (!b || b.t <= 0) return;
-  if (state.mode === "play") b.t -= 1 / 60;
+  const b = state.bubble; if (!b) return;
+  if (b.t <= 0) {
+    if (!b.queue.length) { state.bubble = null; return; }
+    b.text = b.queue.shift(); b.t = b.sec;   // nächste Blase
+  }
+  const now = performance.now(), dt = Math.min(0.1, (now - (b.last || now)) / 1000); b.last = now;
+  if (state.mode === "play") b.t -= dt;   // echte Zeit statt Bildern (gleich schnell auf 60 Hz und 144 Hz)
   const px = Math.round(player.x - cam) + 13, py = Math.round(player.y) - 18;
   ctx.font = "bold 14px Lato, sans-serif";
   const tw = ctx.measureText(b.text).width, bw = tw + 24, bh = 32;
@@ -1198,10 +1216,23 @@ function drawPlayer() {
   rr(-12, 13, 24, 16, 5, C.blue);
   ctx.fillStyle = C.gold; ctx.fillRect(-2, 16, 4, 9);
   // Kopf
+  if (GENDER === 'f') {
+    // Pferdeschwanz hinter dem Kopf (wippt beim Laufen)
+    const swing = p.onGround ? Math.sin(p.walk * 3) * 2 : -3;
+    ctx.fillStyle = "#7a3b1e";
+    ctx.beginPath(); ctx.ellipse(-14, 6 + swing, 5, 10, 0.35, 0, 7); ctx.fill();
+    rr(-13, 0, 5, 4, 2, "#e0457b");                                   // Haargummi
+  }
   rr(-10, -2, 20, 17, 7, "#f2c9a0");
-  ctx.fillStyle = "#4a2f1d"; rr(-11, -4, 22, 8, 4, "#4a2f1d"); ctx.fillRect(-11, -1, 5, 8);
+  if (GENDER === 'f') {
+    ctx.fillStyle = "#7a3b1e"; rr(-11, -5, 22, 9, 5, "#7a3b1e"); ctx.fillRect(-11, -1, 6, 13); // längere Haare
+    ctx.fillRect(2, -1, 8, 3);                                                                  // Pony
+  } else {
+    ctx.fillStyle = "#4a2f1d"; rr(-11, -4, 22, 8, 4, "#4a2f1d"); ctx.fillRect(-11, -1, 5, 8);
+  }
   // Auge
   ctx.fillStyle = "#000"; ctx.fillRect(4, 5, 3, 4);
+  if (GENDER === 'f') ctx.fillRect(6, 3, 3, 1);                       // Wimpern
   // Kopfhörer
   ctx.strokeStyle = C.gold; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.arc(0, 4, 12, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
