@@ -63,7 +63,7 @@
     <div class="card">
       <span class="tag">HKBe · EXCEL</span>
       <h1>Excel Jump</h1>
-      <p>Endlich Pause! Du willst dir im <b>Bücheli Center</b> einen Kaffee holen – aber auf dem Weg warten Excel-Probleme. Löse an jedem Posten die Aufgaben.</p>
+      <p>Endlich Pause! Du willst dir im <b>Bücheli Center</b> ein Schoggigipfeli und ein Redbull holen – aber auf dem Weg warten Excel-Probleme. Löse an jedem Posten die Aufgaben.</p>
       <div class="dl" id="dlBox" tabindex="0">
         <h2>⬇ Zuerst: Übungsdateien herunterladen</h2>
         <p>Ohne diese Excel-Dateien kannst du die Posten nicht lösen. Lade beide herunter und öffne Level 1.</p>
@@ -77,7 +77,7 @@
         <span><kbd>↑</kbd> / <kbd>W</kbd> / <kbd>Leertaste</kbd></span><span>springen</span>
         <span><kbd>E</kbd> / <kbd>Enter</kbd></span><span>Posten öffnen</span>
       </div>
-      <label for="nick">Dein Spielname (kein richtiger Name)</label>
+      <label for="nick">Dein Spielname</label>
       <input type="text" id="nick" maxlength="16" placeholder="z. B. ExcelNinja" autocomplete="off">
       <div class="row"><button class="primary" id="startBtn">Spiel starten</button></div>
     </div>
@@ -113,7 +113,7 @@
   <div class="overlay" id="levelScreen">
     <div class="card">
       <span class="tag">LEVEL GESCHAFFT</span>
-      <h1>Kaffee geholt! ☕</h1>
+      <h1>Schoggigipfeli und Redbull geholt! 🥐</h1>
       <p id="levelText"></p>
       <p>Nach der Schule geht es nochmals ins Bücheli Center. Öffne jetzt die Datei <b id="levelFile"></b>. Ab jetzt gibt es keine Hilfen mehr, und die Hindernisse werden mit jedem Posten schwieriger.</p>
       <a class="dlbtn single" href="uebungen/HKBe_Excel_Funktionen_Teil2.xlsx" download><span class="ico">📊</span><span><b>Level 2 herunterladen</b><small>HKBe_Excel_Funktionen_Teil2.xlsx</small></span></a>
@@ -764,7 +764,7 @@ $("nick").addEventListener("keydown", e => { if (e.key === "Enter") startGame();
 function finish() {
   if (state.level < LEVELS.length) {
     state.mode = "level";
-    $("levelText").innerHTML = `Super, <b>${escapeHtml(state.nick)}</b>! Du hast Level ${state.level} geschafft und dir im Bücheli Center einen Kaffee geholt.`;
+    $("levelText").innerHTML = `Super, <b>${escapeHtml(state.nick)}</b>! Du hast Level ${state.level} geschafft und dir im Bücheli Center ein Schoggigipfeli und ein Redbull geholt.`;
     $("levelFile").textContent = LEVELS[state.level].file;
     $("levelScreen").classList.add("show");
     return;
