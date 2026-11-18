@@ -8,7 +8,7 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: #0b1d33; font-family: "Lato", "Trebuchet MS", sans-serif; overflow: hidden; }
   #wrap { position: relative; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
-  canvas { display: block; image-rendering: pixelated; background: #8fd3ff; box-shadow: 0 10px 40px rgba(0,0,0,.5); border-radius: 6px; }
+  canvas { display: block; background: #8fd3ff; box-shadow: 0 10px 40px rgba(0,0,0,.5); border-radius: 6px; }
   .overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0, 25, 55, .72); z-index: 10; }
   .overlay.show { display: flex; }
   .card { background: #fff; border-radius: 14px; padding: 26px 30px; width: min(560px, 92vw); max-height: 90vh; overflow: auto; box-shadow: 0 20px 60px rgba(0,0,0,.4); border-top: 8px solid #F9AC00; }
@@ -285,8 +285,13 @@ let map, COLS, enemies, coins, posts, gates, movers, flag, player, cam, state, k
 
 function resize() {
   const s = Math.min(window.innerWidth / W, window.innerHeight / H) * 0.98;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);   // höchstens doppelte Auflösung (schont schwache Geräte)
   cvs.style.width = (W * s) + "px";
   cvs.style.height = (H * s) + "px";
+  // Zeichenfläche in echter Bildschirmauflösung statt hochskaliert → flüssiges, scharfes Scrollen
+  cvs.width = Math.round(W * s * dpr);
+  cvs.height = Math.round(H * s * dpr);
+  ctx.setTransform(cvs.width / W, 0, 0, cvs.height / H, 0, 0);
 }
 window.addEventListener("resize", resize); resize();
 
@@ -458,7 +463,9 @@ function setOther(p) {
   if (!p || p.nick === myKey()) return;
   const seen = p.updated_at ? Date.parse(p.updated_at) : Date.now();
   if (Date.now() - seen > STALE_MS) { otherPlayers.delete(p.nick); return; }
-  otherPlayers.set(p.nick, { x: p.x, y: p.y, level: p.level, seen });
+  const old = otherPlayers.get(p.nick);
+  const jump = !old || old.level !== p.level || Math.abs(old.x - p.x) > 400;   // Levelwechsel/Respawn: direkt hinsetzen
+  otherPlayers.set(p.nick, { x: jump ? p.x : old.x, y: jump ? p.y : old.y, tx: p.x, ty: p.y, level: p.level, seen });
 }
 
 function pollPlayers() {
@@ -1219,9 +1226,11 @@ function drawGhosts() {
   for (const [key, p] of otherPlayers) {
     const nick = displayName(key);
     if (p.level !== state.level) continue;
-    const px = Math.round(p.x - cam);
+    // weich zur zuletzt gemeldeten Position gleiten (Updates kommen nur ca. 5× pro Sekunde)
+    p.x += (p.tx - p.x) * 0.18; p.y += (p.ty - p.y) * 0.18;
+    const px = p.x - cam;
     if (px < -40 || px > W + 40) continue;
-    const py = Math.round(p.y);
+    const py = p.y;
     ctx.globalAlpha = 0.45;
     ctx.fillStyle = '#2b2b3a';
     ctx.fillRect(px + 3, py + 26, 8, 12); ctx.fillRect(px + 15, py + 26, 8, 12);
@@ -1257,7 +1266,7 @@ function drawBubble() {
   }
   const now = performance.now(), dt = Math.min(0.1, (now - (b.last || now)) / 1000); b.last = now;
   if (state.mode === "play" || state.mode === "boss" || state.mode === "cutscene") b.t -= dt;   // echte Zeit statt Bildern (gleich schnell auf 60 Hz und 144 Hz)
-  const px = Math.round(player.x - cam) + 13, py = Math.round(player.y) - 18;
+  const px = player.x - cam + 13, py = player.y - 18;
   ctx.font = "bold 14px Lato, sans-serif";
   const tw = ctx.measureText(b.text).width, bw = tw + 24, bh = 32;
   const bx = Math.max(8, Math.min(W - bw - 8, px - 20)), by = py - bh - 12;
@@ -1272,7 +1281,7 @@ function drawBubble() {
 function drawPlayer() {
   const p = player;
   if (p.blink > 0 && Math.floor(p.blink * 12) % 2) return;
-  const px = Math.round(p.x - cam), py = Math.round(p.y);
+  const px = p.x - cam, py = p.y;
   ctx.save();
   ctx.translate(px + p.w / 2, py);
   ctx.scale(p.face, 1);
