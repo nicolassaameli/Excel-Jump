@@ -51,6 +51,19 @@
   .lb td { padding: 5px 10px; border-bottom: 1px solid #eef2f6; }
   .lb tr:nth-child(even) td { background: #f8fafc; }
   .lb tr.me td { background: #fff6de; font-weight: 700; }
+  /* Endboss */
+  #bossQ { background: rgba(70, 0, 0, .55); }
+  #bossQ .card { border-top-color: #AE2135; }
+  .tag.boss { background: #AE2135; }
+  .timer { height: 12px; background: #eee; border-radius: 6px; overflow: hidden; margin: 8px 0 16px; }
+  .timer div { height: 100%; width: 100%; background: linear-gradient(90deg, #AE2135, #F9AC00); }
+  .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .opts button { font-family: Consolas, "Courier New", monospace; font-weight: 900; font-size: 18px; padding: 14px 10px; border-radius: 10px; border: 2px solid #cfd8e3; background: #f8fafc; color: #004388; cursor: pointer; text-align: left; }
+  .opts button:hover { border-color: #004388; }
+  .opts button small { color: #8a97a8; font-size: 13px; margin-right: 8px; }
+  .opts button.ok { background: #11A759; color: #fff; border-color: #11A759; }
+  .opts button.bad { background: #AE2135; color: #fff; border-color: #AE2135; }
+  .opts button.ok small, .opts button.bad small { color: #fff; }
 </style>
 <script async src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -119,6 +132,18 @@
       <a class="dlbtn single" href="uebungen/HKBe_Excel_Funktionen_Teil2.xlsx" download><span class="ico">📊</span><span><b>Level 2 herunterladen</b><small>HKBe_Excel_Funktionen_Teil2.xlsx</small></span></a>
       <p class="small">Wenn du in Level 2 scheiterst, beginnst du am Anfang von Level 2.</p>
       <div class="row"><button class="primary" id="nextBtn">Level 2 starten</button></div>
+    </div>
+  </div>
+
+  <!-- Endboss: Multiple-Choice-Frage -->
+  <div class="overlay" id="bossQ">
+    <div class="card">
+      <span class="tag boss" id="bqTag">ENDBOSS · FRAGE 1 / 5</span>
+      <h2 id="bqText"></h2>
+      <div class="timer"><div id="bqBar"></div></div>
+      <div class="opts" id="bqOpts"></div>
+      <div class="msg" id="bqMsg"></div>
+      <p class="small">Welche Funktion oder Formel liefert die richtige Antwort? Klicken oder Taste <b>1–4</b>. Falsch oder zu langsam: <b>+30 Sekunden</b>.</p>
     </div>
   </div>
 
@@ -476,7 +501,7 @@ function syncPlayer() {
   if (sig === lastSent && now - lastSync < 5000) return;
   lastSync = now; lastSent = sig;
   sbRun(SB.from('players').upsert({
-    nick: myKey(), x, y, level: state.level, updated_at: new Date().toISOString()
+    nick: myKey(), x, y, level: state.mode.startsWith('boss') ? 3 : state.level, updated_at: new Date().toISOString()
   }));
 }
 
@@ -491,7 +516,7 @@ function removePlayer() {
 window.addEventListener('pagehide', removePlayer);
 
 function submitScore() {
-  if (!SB) return Promise.resolve();
+  if (!SB || TEACHER) return Promise.resolve(); // im Lehrermodus kein Eintrag in der Bestenliste
   return sbRun(SB.from('scores').insert({
     nick: state.nick, time: state.time, coins: state.coins, deaths: state.deaths
   }));
@@ -515,7 +540,7 @@ function showLeaderboard() {
    SPIELZUSTAND
    ========================================================= */
 function reset() {
-  state = { mode: "start", level: 1, coins: 0, solved: 0, time: 0, deaths: 0, flash: 0, nearPost: null, postCooldown: null, activePost: null, particles: [], nick: "" };
+  state = { mode: "start", level: 1, coins: 0, solved: 0, time: 0, penalty: 0, bossDone: false, deaths: 0, flash: 0, nearPost: null, postCooldown: null, activePost: null, particles: [], nick: "" };
   startLevel(1);
 }
 
@@ -532,7 +557,9 @@ function startLevel(n) {
    EINGABE
    ========================================================= */
 window.addEventListener("keydown", e => {
-  if (state.mode !== "play") {
+  if (state.mode === "cutscene" && e.key === "Enter") { e.preventDefault(); startBoss(); return; }
+  if (state.mode === "bossq" && /^[1-4]$/.test(e.key)) { e.preventDefault(); answerBoss(Number(e.key) - 1); return; }
+  if (state.mode !== "play" && state.mode !== "boss") {
     if (state.mode === "post" && e.key === "Escape") closePost();
     return;
   }
@@ -593,7 +620,10 @@ function burst(x, y, color, n = 12) {
 
 function update(dt) {
   // Echtzeit seit Spielstart (zählt auch in Posten, Zwischenbildschirm und anderen Tabs)
-  if (state.startedAt && !state.endedAt) state.time = (Date.now() - state.startedAt) / 1000;
+  if (state.startedAt && !state.endedAt) state.time = (Date.now() - state.startedAt) / 1000 + (state.penalty || 0);
+  if (state.mode === "cutscene") { updateCutscene(dt); return; }
+  if (state.mode === "boss") { updateBoss(dt); return; }
+  if (state.mode === "bossq") { updateBossQ(dt); return; }
   if (state.mode !== "play") { updateGates(dt); return; }
   const p = player;
 
@@ -769,9 +799,10 @@ function finish() {
     $("levelScreen").classList.add("show");
     return;
   }
+  if (!state.bossDone) { startCutscene(); return; }   // Animation, danach Endboss vor dem Bücheli Center
   state.mode = "end";
   state.endedAt = Date.now();
-  state.time = (state.endedAt - state.startedAt) / 1000;
+  state.time = (state.endedAt - state.startedAt) / 1000 + (state.penalty || 0);
   $("endText").innerHTML = `Super, <b>${escapeHtml(state.nick)}</b>! Du hast beide Level mit allen Posten gelöst und bist im Bücheli Center angekommen.<br>Zeit: <b>${fmtTime(state.time)}</b> · Münzen: <b>${state.coins}</b> · Neustarts: <b>${state.deaths}</b>`;
   $("endWord").innerHTML = solutionWord().split("").map(c => `<span>${escapeHtml(c)}</span>`).join("");
   $("endScreen").classList.add("show");
@@ -1225,7 +1256,7 @@ function drawBubble() {
     b.text = b.queue.shift(); b.t = b.sec;   // nächste Blase
   }
   const now = performance.now(), dt = Math.min(0.1, (now - (b.last || now)) / 1000); b.last = now;
-  if (state.mode === "play") b.t -= dt;   // echte Zeit statt Bildern (gleich schnell auf 60 Hz und 144 Hz)
+  if (state.mode === "play" || state.mode === "boss" || state.mode === "cutscene") b.t -= dt;   // echte Zeit statt Bildern (gleich schnell auf 60 Hz und 144 Hz)
   const px = Math.round(player.x - cam) + 13, py = Math.round(player.y) - 18;
   ctx.font = "bold 14px Lato, sans-serif";
   const tw = ctx.measureText(b.text).width, bw = tw + 24, bh = 32;
@@ -1313,6 +1344,7 @@ function drawHUD() {
 }
 
 function draw() {
+  if (state.mode === "boss" || state.mode === "bossq") { drawBoss(); return; }
   drawBackground();
   drawGoal();
   drawTiles();
@@ -1324,7 +1356,389 @@ function draw() {
   drawPlayer();
   drawBubble();
   drawParticles();
+  if (state.mode === "cutscene") { drawCutscene(); return; }
   drawHUD();
+}
+
+
+
+/* Flammen in mehreren Schichten; k = Höhe (0 = keine, 1 = volle Höhe) */
+function drawFlames(t, k) {
+  const layers = [["#7a1400", 300, 0.7, 60], ["#c8300a", 210, 1.0, 44], ["#f06a12", 140, 1.4, 34], ["#ffb02e", 85, 1.9, 26], ["#ffe066", 40, 2.6, 20]];
+  for (const [col, hgt, sp, step] of layers) {
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, GROUND_Y);
+    for (let x = -step; x <= W + step; x += step) {
+      const h = k * hgt * (0.55 + 0.45 * Math.abs(Math.sin(t * sp * 2 + x * 0.09) * Math.cos(t * sp * 1.3 + x * 0.031)));
+      ctx.quadraticCurveTo(x + step * 0.25, GROUND_Y - h * 0.55, x + step * 0.5, GROUND_Y - h);
+      ctx.quadraticCurveTo(x + step * 0.75, GROUND_Y - h * 0.55, x + step, GROUND_Y - h * 0.15);
+    }
+    ctx.lineTo(W, GROUND_Y); ctx.closePath(); ctx.fill();
+  }
+}
+
+/* =========================================================
+   ANIMATION vor dem Endboss: Der Proteindrink mutiert zur Fehlermeldung
+   ========================================================= */
+const CUT_LEN = 7.4;
+let cut = null;
+const ease = x => x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x);
+
+function startCutscene() {
+  state.mode = "cutscene"; state.nearPost = null; keys = {};
+  Object.assign(player, { vx: 0, face: 1 });
+  cut = { t: 0, sparked: 0 };
+  // Fehlerfenster vorbereiten (wird in der Animation schon gezeichnet)
+  boss = { round: 0, results: [], shots: [], fireIn: 1.2, intro: 2.6, shake: 0, embers: [], defeated: 0, q: null };
+  say(["Endlich! Mein Proteindrink!", "Hä?! Was passiert da?"], 2.2);
+}
+
+function updateCutscene(dt) {
+  const p = player;
+  cut.t += dt;
+  // Spielfigur bleibt stehen (Schwerkraft wirkt weiter)
+  p.vx = 0; p.vy = Math.min(p.vy + GRAV * dt, 1100); moveBody(p, dt);
+  // Fehlerzeichen sprühen aus dem Shaker
+  if (cut.t > 2.4 && cut.t < 4.6 && Math.random() < dt * 25) {
+    const b = cutBottle();
+    burst(b.x + cam, b.y, Math.random() < .5 ? C.red : C.gold, 2);
+  }
+  for (const pa of state.particles) { pa.vy += 900 * dt; pa.x += pa.vx * dt; pa.y += pa.vy * dt; pa.life -= dt; }
+  state.particles = state.particles.filter(pa => pa.life > 0);
+  if (cut.t >= CUT_LEN) startBoss();
+}
+
+// Position und Grösse des Shakers (Bildschirmkoordinaten)
+function cutBottle() {
+  const t = cut.t, hx = player.x - cam + 13 + player.face * 16, hy = player.y + 20;
+  const rise = ease((t - 3.6) / 1.0);                 // schwebt hoch
+  const shake = t > 2.2 ? Math.sin(t * 60) * Math.min(4, (t - 2.2) * 3) : 0;
+  return { x: hx + shake + (W / 2 - hx) * rise * 0.3, y: hy - rise * 120, scale: 1 + rise * 0.8 };
+}
+
+function drawShaker(x, y, s, glow) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  if (glow > 0) { ctx.fillStyle = `rgba(255,40,30,${glow * 0.5})`; ctx.beginPath(); ctx.arc(0, -4, 16 + glow * 8, 0, 7); ctx.fill(); }
+  rr(-6, -18, 12, 6, 2, "#333");                       // Deckel
+  rr(-7, -13, 14, 22, 3, glow > 0.5 ? "#ff6b5e" : "#e8f1f8");
+  ctx.fillStyle = C.blue; ctx.fillRect(-7, -6, 14, 7);   // Etikett
+  ctx.fillStyle = "#fff"; ctx.font = "bold 4px Lato, sans-serif"; ctx.textAlign = "center"; ctx.fillText("PROTEIN", 0, -1.5);
+  ctx.textAlign = "left";
+  ctx.restore();
+}
+
+function drawCutscene() {
+  const t = cut.t, now = performance.now() / 1000;
+  const glow = ease((t - 2.2) / 1.4);
+  const morph = ease((t - 4.0) / 0.8);                 // Shaker → Fehlermeldung
+  const grow = ease((t - 4.6) / 1.8);                  // Fehlermeldung wächst zur Endboss-Grösse
+  const fire = ease((t - 4.6) / 1.8);
+  // Bildschirm wackelt während der Mutation
+  const quake = t > 3.6 && t < 6.6 ? (Math.random() - .5) * 8 * Math.min(1, (t - 3.6)) : 0;
+  ctx.save(); ctx.translate(quake, quake * 0.6);
+
+  // Himmel färbt sich rot, Flammen steigen
+  if (fire > 0) {
+    ctx.fillStyle = `rgba(70,0,0,${fire * 0.75})`; ctx.fillRect(-10, -10, W + 20, H + 20);
+    drawFlames(now, fire);
+    drawPlayer();
+  }
+
+  // Shaker in der Hand / schwebend
+  const b = cutBottle();
+  if (morph < 1) { ctx.globalAlpha = 1 - morph; drawShaker(b.x, b.y, b.scale * 1.6, glow); ctx.globalAlpha = 1; }
+
+  // Fehlermeldung entsteht aus dem Shaker und fliegt an ihren Platz
+  if (morph > 0) {
+    const w = bossWin(now);
+    const tx = w.x + w.w / 2, ty = w.y + w.h / 2;
+    const k = 0.08 + 0.32 * morph + 0.6 * grow;
+    const cx = b.x + (tx - b.x) * grow, cy = b.y + (ty - b.y) * grow;
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(k, k); ctx.translate(-tx, -ty);
+    ctx.globalAlpha = morph;
+    drawErrorWindow(now);
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+
+  // Blitz beim Verwandeln und am Schluss
+  const flash = Math.max(0, 1 - Math.abs(t - 4.3) * 4) * 0.7 + ease((t - 6.6) / 0.8);
+  if (flash > 0) { ctx.fillStyle = `rgba(255,${t > 6 ? 60 : 255},${t > 6 ? 30 : 255},${Math.min(1, flash)})`; ctx.fillRect(0, 0, W, H); }
+
+  // Hinweis zum Überspringen
+  ctx.fillStyle = "rgba(255,255,255,.75)"; ctx.font = "bold 12px Lato, sans-serif"; ctx.textAlign = "right";
+  ctx.fillText("Enter = überspringen", W - 14, H - 12); ctx.textAlign = "left";
+}
+
+/* =========================================================
+   ENDBOSS (nach Level 2)
+   Eine riesige Excel-Fehlermeldung wirft Fehlerwerte. Sie treffen immer.
+   Bei jedem Treffer: 7 Sekunden für eine Multiple-Choice-Frage.
+   Falsch oder zu langsam: +30 Sekunden. Nach 5 Fragen ist der Fehler behoben.
+   ========================================================= */
+const BOSS_ROUNDS = 5, QUIZ_SEC = 7, BOSS_PENALTY = 30;
+// Pro Runde eine Stufe: [Frage, richtige Funktion, [falsche Funktionen]]
+const BOSS_QS = [
+  [ // 1: einfach, 3 Antworten
+    ["Wie hoch ist das Total aller Beträge?", "SUMME", ["MITTELWERT", "ANZAHL"]],
+    ["Welches ist der tiefste Wert?", "MIN", ["MAX", "SUMME"]],
+    ["Welches ist der höchste Wert?", "MAX", ["MIN", "ANZAHL"]],
+    ["Wie hoch ist der Notendurchschnitt?", "MITTELWERT", ["SUMME", "MAX"]],
+  ],
+  [ // 2: etwas genauer lesen, 3 Antworten
+    ["Wie viele Zellen enthalten eine Zahl?", "ANZAHL", ["ANZAHL2", "SUMME"]],
+    ["Wie viele Zellen sind nicht leer?", "ANZAHL2", ["ANZAHL", "MAX"]],
+    ["Welches Datum ist heute?", "HEUTE", ["MONAT", "JAHR"]],
+    ["Einen Betrag auf 2 Kommastellen runden?", "RUNDEN", ["SUMME", "GANZZAHL"]],
+  ],
+  [ // 3: ähnliche Funktionen, 4 Antworten
+    ["Wie viele Personen haben an der Umfrage teilgenommen? (Text und Zahlen)", "ANZAHL2", ["ANZAHL", "SUMME", "ANZAHLLEEREZELLEN"]],
+    ["Wie viele Personen haben eine Zahl angegeben? (Liste mit Text und Zahlen)", "ANZAHL", ["ANZAHL2", "SUMME", "MAX"]],
+    ["Welches ist die beste Laufzeit in Sekunden?", "MIN", ["MAX", "MITTELWERT", "RUNDEN"]],
+    ["Wie gross ist der kleinste Lagerbestand?", "MIN", ["MAX", "ANZAHL", "SUMME"]],
+  ],
+  [ // 4: Runden und Daten, 4 Antworten
+    ["Preis auf 5 Rappen runden (12.37 → 12.35)?", "VRUNDEN", ["RUNDEN", "AUFRUNDEN", "GANZZAHL"]],
+    ["Wie viele Zellen in der Liste sind leer?", "ANZAHLLEEREZELLEN", ["ANZAHL", "ANZAHL2", "SUMME"]],
+    ["A2: 03.03.2026 · B2: 17.03.2026. Wie viele Tage liegen dazwischen?", "=B2-A2", ["=A2-B2", "=A2+B2", "=SUMME(A2:B2)"]],
+    ["A2: 31.07.2028 (Ende) · B2: 01.08.2025 (Start). Wie viele Tage dauert es?", "=A2-B2", ["=B2-A2", "=A2+B2", "=MITTELWERT(A2:B2)"]],
+    ["Zuschauer auf Tausend runden (23'680 → 24'000)?", "RUNDEN", ["ABRUNDEN", "GANZZAHL", "ANZAHL"]],
+  ],
+  [ // 5: knifflig, 4 sehr ähnliche Antworten
+    ["Immer auf ganze Franken aufrunden (12.10 → 13)?", "AUFRUNDEN", ["RUNDEN", "VRUNDEN", "ABRUNDEN"]],
+    ["Immer auf ganze Franken abrunden (12.90 → 12)?", "ABRUNDEN", ["RUNDEN", "AUFRUNDEN", "VRUNDEN"]],
+    ["Durchschnitt auf 1 Kommastelle: Welche Funktion steht ganz aussen?", "RUNDEN", ["MITTELWERT", "VRUNDEN", "SUMME"]],
+    ["Spannweite einer Liste: =MAX(…) − ???(…)", "MIN", ["MAX", "ANZAHL", "MITTELWERT"]],
+  ],
+];
+const BOSS_ERRORS = [
+  ["#WERT!", "Ein Wert in der Formel hat", "den falschen Datentyp."],
+  ["#DIV/0!", "Division durch null.", "Das geht wirklich nicht."],
+  ["#NV", "Der Wert ist nicht verfügbar.", "Vielleicht nie mehr."],
+  ["#BEZUG!", "Ungültiger Zellbezug.", "Wo ist die Zelle hin?"],
+  ["#NAME?", "Funktion unbekannt.", "Tippfehler? Bestimmt."],
+];
+const SHOT_LABELS = ["#NV", "#DIV/0!", "#BEZUG!", "#WERT!", "#NAME?", "#ZAHL!"];
+let boss = null;
+
+function bossWin(t) { return { x: 540 + Math.sin(t * 1.3) * 14, y: 46 + Math.sin(t * 2.1) * 6, w: 380, h: 190 }; }
+
+function startBoss() {
+  state.mode = "boss"; state.nearPost = null; cam = 0; keys = {};
+  boss = { round: 0, results: [], shots: [], fireIn: 1.2, intro: 2.6, shake: 0, embers: [], defeated: 0, q: null };
+  Object.assign(player, { x: 110, y: GROUND_Y - player.h, vx: 0, vy: 0, face: 1, blink: 0, riding: null, onGround: true });
+  say(["Was ist DAS?!", "Eine Fehlermeldung versperrt den Eingang!"], 1.6);
+}
+
+function updateEmbers(dt) {
+  if (Math.random() < dt * 35) boss.embers.push({ x: Math.random() * W, y: GROUND_Y, vy: -70 - Math.random() * 140, life: 1.2 + Math.random() * 1.5 });
+  for (const e of boss.embers) { e.y += e.vy * dt; e.x += Math.sin(e.y * 0.04) * 30 * dt; e.life -= dt; }
+  boss.embers = boss.embers.filter(e => e.life > 0);
+  for (const pa of state.particles) { pa.vy += 900 * dt; pa.x += pa.vx * dt; pa.y += pa.vy * dt; pa.life -= dt; }
+  state.particles = state.particles.filter(pa => pa.life > 0);
+}
+
+function updateBoss(dt) {
+  const b = boss, p = player;
+  updateEmbers(dt);
+  if (b.shake > 0) b.shake -= dt;
+  if (b.defeated > 0) {
+    b.defeated -= dt;
+    if (Math.random() < dt * 20) { const w = bossWin(performance.now() / 1000); burst(w.x + Math.random() * w.w, w.y + Math.random() * w.h, Math.random() < .5 ? C.gold : C.red, 10); }
+    if (b.defeated <= 0) { state.bossDone = true; finish(); }
+    return;
+  }
+  // Bewegung (einfacher Boden ohne Kacheln)
+  const target = (right() ? 1 : 0) - (left() ? 1 : 0);
+  p.vx += (target * SPEED - p.vx) * Math.min(1, dt * (p.onGround ? 14 : 6));
+  if (target) p.face = target;
+  if (jump() && p.onGround) { p.vy = -JUMP; p.onGround = false; }
+  if (!jump() && p.vy < -300) p.vy = -300;
+  p.vy = Math.min(p.vy + GRAV * dt, 1100);
+  p.x = Math.max(10, Math.min(W - p.w - 10, p.x + p.vx * dt));
+  p.y += p.vy * dt;
+  if (p.y + p.h >= GROUND_Y) { p.y = GROUND_Y - p.h; p.vy = 0; p.onGround = true; } else p.onGround = false;
+  p.walk += Math.abs(p.vx) * dt * 0.05;
+  if (p.blink > 0) p.blink -= dt;
+
+  if (b.intro > 0) { b.intro -= dt; return; }
+  // Werfen: mit jeder Runde schneller und mehr
+  const lvl = b.round;
+  b.fireIn -= dt;
+  if (b.fireIn <= 0 && b.shots.length < 6) {
+    b.fireIn = Math.max(0.45, 1.3 - lvl * 0.2);
+    const w = bossWin(performance.now() / 1000), n = 1 + (lvl >= 2) + (lvl >= 4);
+    for (let k = 0; k < n; k++) {
+      const label = SHOT_LABELS[Math.floor(Math.random() * SHOT_LABELS.length)];
+      b.shots.push({ x: w.x + 50, y: w.y + 95, vx: -160 - Math.random() * 120, vy: -160 + k * 110 + Math.random() * 60,
+                     speed: 190 + lvl * 45, turn: 1.4 + lvl * 0.45, rot: Math.random() * 6, label });
+    }
+  }
+  // Zielsuchend: Die Fehlerwerte werden immer schneller, ausweichen klappt nie lange
+  for (const sh of b.shots) {
+    const dx = p.x + p.w / 2 - sh.x, dy = p.y + p.h / 2 - sh.y, d = Math.hypot(dx, dy) || 1;
+    sh.speed += dt * 70;
+    const k = Math.min(1, dt * sh.turn);
+    sh.vx += (dx / d * sh.speed - sh.vx) * k; sh.vy += (dy / d * sh.speed - sh.vy) * k;
+    sh.x += sh.vx * dt; sh.y += sh.vy * dt; sh.rot += dt * 5;
+    if (Math.abs(dx) < 24 && Math.abs(dy) < 28) {
+      b.shots = []; b.shake = 0.5; state.flash = 0.6;
+      burst(p.x + p.w / 2, p.y + p.h / 2, C.red, 24);
+      openBossQ();
+      return;
+    }
+  }
+}
+
+function openBossQ() {
+  const b = boss;
+  state.mode = "bossq"; keys = {};
+  const pool = BOSS_QS[b.round];
+  const [text, right, wrong] = pool[Math.floor(Math.random() * pool.length)];
+  const opts = [right, ...wrong].sort(() => Math.random() - 0.5);
+  b.q = { text, opts, correct: opts.indexOf(right), left: QUIZ_SEC, answered: false };
+  $("bqTag").textContent = `ENDBOSS · FRAGE ${b.round + 1} / ${BOSS_ROUNDS}`;
+  $("bqText").textContent = text;
+  $("bqMsg").textContent = ""; $("bqMsg").className = "msg";
+  $("bqBar").style.width = "100%";
+  $("bqOpts").innerHTML = opts.map((o, i) =>
+    `<button type="button" data-i="${i}"><small>${i + 1}</small>${o}</button>`).join("");
+  $("bqOpts").querySelectorAll("button").forEach(btn => btn.onclick = () => answerBoss(Number(btn.dataset.i)));
+  $("bossQ").classList.add("show");
+}
+
+function updateBossQ(dt) {
+  updateEmbers(dt);
+  const q = boss.q; if (!q || q.answered) return;
+  q.left -= dt;
+  $("bqBar").style.width = Math.max(0, q.left / QUIZ_SEC * 100) + "%";
+  if (q.left <= 0) answerBoss(-1);
+}
+
+function answerBoss(i) {
+  const b = boss, q = b.q; if (!q || q.answered) return;
+  q.answered = true;
+  const ok = i === q.correct;
+  const btns = $("bqOpts").querySelectorAll("button");
+  btns[q.correct].classList.add("ok");
+  if (!ok && i >= 0) btns[i].classList.add("bad");
+  if (ok) { $("bqMsg").textContent = "Richtig! Der Fehler wird schwächer."; $("bqMsg").className = "msg ok"; }
+  else {
+    state.penalty += BOSS_PENALTY;
+    $("bqMsg").textContent = (i < 0 ? "Zeit abgelaufen!" : "Falsch!") + ` +${BOSS_PENALTY} Sekunden. Richtig ist ${q.opts[q.correct]}.`;
+    $("bqMsg").className = "msg bad";
+  }
+  b.results.push(ok); b.round++;
+  setTimeout(() => {
+    $("bossQ").classList.remove("show");
+    state.mode = "boss";
+    if (b.round >= BOSS_ROUNDS) { b.defeated = 2.4; say("Fehler behoben! Jetzt mein Proteindrink!", 2.4); }
+    else { b.fireIn = 1.4; player.blink = 1.0; }
+  }, ok ? 1000 : 2200);
+}
+
+function drawBoss() {
+  const b = boss, t = performance.now() / 1000;
+  // Glühender Himmel
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, "#1a0202"); g.addColorStop(0.55, "#5c0b02"); g.addColorStop(1, "#c23a00");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // Flammen in mehreren Schichten
+  drawFlames(t, 1);
+  // Funken
+  ctx.fillStyle = "#ffd35a";
+  for (const e of b.embers) { ctx.globalAlpha = Math.min(1, e.life); ctx.fillRect(e.x, e.y, 3, 3); }
+  ctx.globalAlpha = 1;
+  // Verkohlter Boden mit glühenden Rissen
+  ctx.fillStyle = "#2b1712"; ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
+  ctx.fillStyle = "#4a2418"; ctx.fillRect(0, GROUND_Y, W, 8);
+  ctx.globalAlpha = 0.5 + 0.3 * Math.sin(t * 3);
+  ctx.fillStyle = "#ff5a1a";
+  for (let i = 0; i < 14; i++) ctx.fillRect((i * 97) % W, GROUND_Y + 16 + (i * 37) % 54, 26 + (i * 13) % 30, 3);
+  ctx.globalAlpha = 1;
+
+  drawErrorWindow(t);
+
+  // Geschosse (Fehlerwerte)
+  ctx.font = "bold 13px Consolas, monospace"; ctx.textAlign = "center";
+  for (const sh of b.shots) {
+    const w = ctx.measureText(sh.label).width + 16;
+    ctx.save(); ctx.translate(sh.x, sh.y); ctx.rotate(Math.sin(sh.rot) * 0.5);
+    rr(-w / 2, -13, w, 26, 7, "#AE2135");
+    ctx.strokeStyle = "#ffd35a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(-w / 2, -13, w, 26, 7); ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.fillText(sh.label, 0, 5);
+    ctx.restore();
+  }
+  ctx.textAlign = "left";
+
+  drawPlayer(); drawBubble(); drawParticles();
+
+  // HUD
+  rr(12, 12, 360, 40, 10, "rgba(110,0,0,.9)");
+  ctx.fillStyle = "#fff"; ctx.font = "bold 16px Lato, Trebuchet MS, sans-serif";
+  ctx.fillText(`ENDBOSS · Frage ${Math.min(b.round + 1, BOSS_ROUNDS)}/${BOSS_ROUNDS}`, 26, 38);
+  ctx.fillText(`⏱ ${fmtTime(state.time)}`, 250, 38);
+  if (state.penalty) { ctx.fillStyle = "#ffd35a"; ctx.font = "bold 13px Lato, sans-serif"; ctx.fillText(`davon +${state.penalty} s Strafe`, 26, 70); }
+
+  if (state.flash > 0) { state.flash -= 1 / 60; ctx.fillStyle = `rgba(255,0,0,${Math.max(0, state.flash) * 0.5})`; ctx.fillRect(0, 0, W, H); }
+
+  // Intro-Schriftzug
+  if (b.intro > 0) {
+    ctx.globalAlpha = Math.min(1, b.intro);
+    ctx.textAlign = "center";
+    ctx.font = "900 64px Lato, Trebuchet MS, sans-serif";
+    ctx.fillStyle = "#000"; ctx.fillText("ENDBOSS", W / 2 + 4, 274);
+    ctx.fillStyle = "#ffd35a"; ctx.fillText("ENDBOSS", W / 2, 270);
+    ctx.font = "bold 18px Lato, sans-serif"; ctx.fillStyle = "#fff";
+    ctx.fillText("5 Fragen · je 7 Sekunden · falsch oder zu langsam: +30 Sekunden", W / 2, 306);
+    ctx.textAlign = "left"; ctx.globalAlpha = 1;
+  }
+  if (b.defeated > 0) {
+    ctx.fillStyle = `rgba(255,255,255,${Math.max(0, b.defeated - 1.6)})`; ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = "center"; ctx.font = "900 52px Lato, Trebuchet MS, sans-serif";
+    ctx.fillStyle = "#000"; ctx.fillText("FEHLER BEHOBEN!", W / 2 + 3, 283);
+    ctx.fillStyle = C.green; ctx.fillText("FEHLER BEHOBEN!", W / 2, 280);
+    ctx.textAlign = "left";
+  }
+}
+
+function drawErrorWindow(t) {
+  const b = boss, w = bossWin(t);
+  let x = w.x, y = w.y;
+  if (b.shake > 0) { x += (Math.random() - .5) * 14; y += (Math.random() - .5) * 10; }
+  if (b.defeated > 0) { ctx.globalAlpha = Math.max(0, (b.defeated - 0.6) / 1.8); x += (Math.random() - .5) * 20; y += (Math.random() - .5) * 20; }
+  const err = BOSS_ERRORS[Math.min(b.round, BOSS_ERRORS.length - 1)];
+  rr(x + 10, y + 10, w.w, w.h, 6, "rgba(0,0,0,.45)");
+  rr(x, y, w.w, w.h, 6, "#f3f3f3");
+  rr(x, y, w.w, 32, 6, "#217346"); ctx.fillStyle = "#217346"; ctx.fillRect(x, y + 22, w.w, 10);
+  ctx.fillStyle = "#fff"; ctx.font = "bold 14px Segoe UI, Lato, sans-serif"; ctx.fillText("Microsoft Excel", x + 14, y + 21);
+  ctx.fillText("✕", x + w.w - 24, y + 21);
+  // Rotes Fehler-Symbol mit wütendem Gesicht; die Augen folgen der Spielfigur
+  const cx = x + 56, cy = y + 98;
+  ctx.fillStyle = "#d13438"; ctx.beginPath(); ctx.arc(cx, cy, 36, 0, 7); ctx.fill();
+  const ang = Math.atan2(player.y + 10 - cy, player.x - cx);
+  for (const ex of [-13, 13]) {
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.ellipse(cx + ex, cy - 4, 9, 8, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(cx + ex + Math.cos(ang) * 4, cy - 4 + Math.sin(ang) * 3, 4, 0, 7); ctx.fill();
+  }
+  ctx.strokeStyle = "#3a0000"; ctx.lineWidth = 4; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(cx - 22, cy - 20); ctx.lineTo(cx - 5, cy - 12); ctx.moveTo(cx + 22, cy - 20); ctx.lineTo(cx + 5, cy - 12); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx - 12, cy + 18); ctx.quadraticCurveTo(cx, cy + 8 + Math.sin(t * 8) * 2, cx + 12, cy + 18); ctx.stroke();
+  ctx.lineCap = "butt";
+  // Text
+  ctx.fillStyle = "#222"; ctx.font = "900 30px Consolas, monospace"; ctx.fillText(err[0], x + 110, y + 82);
+  ctx.font = "15px Segoe UI, Lato, sans-serif"; ctx.fillStyle = "#333";
+  ctx.fillText(err[1], x + 110, y + 108); ctx.fillText(err[2], x + 110, y + 128);
+  rr(x + w.w - 190, y + w.h - 44, 80, 28, 4, "#e1e1e1"); rr(x + w.w - 100, y + w.h - 44, 80, 28, 4, "#e1e1e1");
+  ctx.fillStyle = "#333"; ctx.font = "14px Segoe UI, Lato, sans-serif"; ctx.textAlign = "center";
+  ctx.fillText("OK", x + w.w - 150, y + w.h - 25); ctx.fillText("Hilfe", x + w.w - 60, y + w.h - 25);
+  ctx.textAlign = "left";
+  // Lebensbalken: eine Zelle pro Frage
+  for (let i = 0; i < BOSS_ROUNDS; i++) {
+    const r = b.results[i];
+    const col = r === undefined ? "#d13438" : r ? C.green : "#777";
+    rr(x + i * 77, y + w.h + 12, 70, 14, 4, col);
+  }
+  ctx.globalAlpha = 1;
 }
 
 /* =========================================================
